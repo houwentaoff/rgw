@@ -1,0 +1,77 @@
+###############################################
+#
+# code/s3/src
+#
+# 2015/12/07 - [Sean Hou] created file
+#
+# 
+#
+# All rights reserved. No Part of this file may be reproduced, stored
+# in a retrieval system, or transmitted, in any form, or by any means,
+# electronic, mechanical, photocopying, recording, or otherwise,
+# without the prior consent of Sobey, Inc.
+# 
+# ###############################################
+
+#AR                      =   arm-goke-linux-gnueabi-ar
+#CXX                     =   arm-goke-linux-gnueabi-g++
+
+#CC                      =   arm-goke-linux-gnueabi-gcc
+#INCLUDES               +=   -I$(SDK_TOP)/legacy/build/include
+#COMPILE_OPTS=COMPILE_OPTS$(INCLUDES) -I. -DSOCKLEN_T=socklen_t -D_LARGEFILE_SOURCE=1 -D_FILE_OFFSET_BITS=64
+#CPLUSPLUS_FLAGS         =   $(COMPILE_OPTS) -DBSD=1 -g -O2 -fpermissive
+#SYS_LIBS                =   -L/opt/goke/ct/4.6.1/usr/arm-goke-linux-gnueabi/sysroot/lib/
+#GK_LIBS                 =   /home/other/ipc/amba_sdk/a5s_linux_sdk/ambarella/prebuild/cavlc/libcavlc.a
+
+ifndef CC
+CC=cc
+endif
+
+ifndef CXX
+CXX=g++
+endif
+
+ifndef AR
+AR=ar
+endif
+
+ifndef RANLIB
+RANLIB=ranlib
+endif
+
+ECHO=echo
+
+#ifndef CFLAGS
+#CFLAGS = -O2 -Wall -g
+#endif
+
+#path
+#RTSP_TOP=/home/work/work_ext/ipc/gk7101/customer/juanvision/ambarella/app/ipcam/rtsp_branch/live555
+
+#CFLAGS += -I$(BSREAD_TOP) -L$(BSREAD_TOP) -lbsreader
+#debug
+
+#ifndef CPLUSPLUS_FLAGS
+#CPLUSPLUS_FLAGS += $(INCLUDES)
+#CPLUSPLUS_FLAGS += $(LIBS)
+#endif
+
+DESTDIR=
+#debug 
+V=0
+
+Q=@
+E=echo
+ifeq ($(V), 1)
+Q=
+E=true
+endif
+
+#CPP
+%.o:%.cpp
+	$(Q)$(CXX) -c $< -o $@ $(CPLUSPLUS_FLAGS)
+	@$(E) "  CXX " $<
+#C
+%.o:%.c
+	$(Q)$(CC) -c $< -o $@ $(C_FLAGS)
+	@$(E) "  CC  " $<
