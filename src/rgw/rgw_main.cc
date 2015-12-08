@@ -1017,6 +1017,8 @@ int main(int argc, const char **argv)
 {
   // dout() messages will be sent to stderr, but FCGX wants messages on stdout
   // Redirect stderr to stdout.
+ /* :TODO:2015年12月08日 17时02分14秒:hwt:  */
+#if 0
   TEMP_FAILURE_RETRY(close(STDERR_FILENO));
   if (TEMP_FAILURE_RETRY(dup2(STDOUT_FILENO, STDERR_FILENO) < 0)) {
     int err = errno;
@@ -1264,7 +1266,8 @@ int main(int argc, const char **argv)
   g_ceph_context->put();
 
   signal_fd_finalize();
-
+#endif
+ /* :TODO:End---  */
   return 0;
 }
 

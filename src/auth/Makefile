@@ -2,7 +2,7 @@
 #
 # code/s3/src/common
 #
-# 2015/12/07 - [Sean Hou] created file
+# 2015/12/08 - [Sean Hou] created file
 #
 # 
 #
@@ -15,7 +15,7 @@
 
 default:all
 
-MODULE_NAME 	:= common
+MODULE_NAME 	:=  auth
 
 MODULE_LIBS 	 =  lib$(MODULE_NAME).a
 
@@ -23,7 +23,7 @@ INCLUDES 		 =  -I../
 
 include ../lib.rules
 
-LIB_OBJS = BackTrace.o WorkQueue.o dout.o
+LIB_OBJS = 
 
 MODULE_TARGETS = $(MODULE_LIBS)
 

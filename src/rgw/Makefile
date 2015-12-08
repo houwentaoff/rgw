@@ -17,22 +17,30 @@ default:all
 
 MODULE_NAME := rgw
 
-INCLUDES 	=
+INCLUDES 	 = -I../
 
 include ../lib.rules
 
-LOCAL_LIBS 	=
+LOCAL_LIBS 	 = ../common/libcommon.a ../global/libglobal.a ../include/libinclude.a \
+			   ../cls/libcls.a ../auth/libauth.a ../json_spirit/libjson_spirit.a   \
+			   ../log/liblog.a ../msg/libmsg.a 
 
-LD = $(SYS_LIBS) -pthread 
+LD = $(SYS_LIBS) -pthread -lfcgi 
 
-all:
-	@echo -e "\033[5;41;32m Building rgw ... \033[0m"
+RGW_SERVER  := rgw
 
-rgw: $(LOCAL_LIBS)
+all:$(RGW_SERVER) 
+	@echo -e "\033[5;41;32m Building $(MODULE_NAME) ... \033[0m"
+
+
+RGW_OBJS  	  =  rgw_env.o rgw_fcgi.o rgw_client_io.o rgw_common.o \
+			     rgw_op.o rgw_rest.o  rgw_rest_s3.o rgw_main.o 
+
+$(RGW_SERVER): $(LOCAL_LIBS) $(RGW_OBJS)
 		@$(CXX) $^ -o $@ $(LD)
 
 .PHONY:clean
 
 clean:
 	-@echo -e "\033[5;41;32m Cleaning $(MODULE_NAME) ... \033[0m"
-	-rm *.o $(MODULE_TARGETS) $(LIB_OBJS)
+	-$(RM) *.o $(MODULE_TARGETS) $(LIB_OBJS)

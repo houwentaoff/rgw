@@ -19,16 +19,16 @@ MODULE_NAME 	:= global
 
 MODULE_LIBS 	 =  lib$(MODULE_NAME).a
 
-INCLUDES =
+INCLUDES 		 = -I../
 
 include ../lib.rules
 
-LIB_OBJS =
+LIB_OBJS 		 = global_init.o global_context.o
 
 MODULE_TARGETS = $(MODULE_LIBS)
 
 all:$(MODULE_TARGETS)
-	@echo -e "\033[5;41;32m Building $(MODULE_NAME) ... \033[0m"
+#	@echo -e "\033[5;41;32m Building $(MODULE_NAME) ... \033[0m"
 
 $(MODULE_LIBS): $(LIB_OBJS)	
 	@$(AR) rucs $@ $^
@@ -37,4 +37,4 @@ $(MODULE_LIBS): $(LIB_OBJS)
 
 clean:
 	-@echo -e "\033[5;41;32m Cleaning $(MODULE_NAME) ... \033[0m"
-	-rm *.o $(MODULE_TARGETS) $(LIB_OBJS)
+	-$(RM) *.o $(MODULE_TARGETS) $(LIB_OBJS)

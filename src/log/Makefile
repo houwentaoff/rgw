@@ -15,7 +15,7 @@
 
 default:all
 
-MODULE_NAME 	:= common
+MODULE_NAME 	:=  log
 
 MODULE_LIBS 	 =  lib$(MODULE_NAME).a
 
@@ -23,7 +23,7 @@ INCLUDES 		 =  -I../
 
 include ../lib.rules
 
-LIB_OBJS = BackTrace.o WorkQueue.o dout.o
+LIB_OBJS = 
 
 MODULE_TARGETS = $(MODULE_LIBS)
 
