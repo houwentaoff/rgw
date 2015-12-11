@@ -8,7 +8,8 @@
 
 #include "include/types.h"
 
-#include "rgw_common.h"
+//#include "rgw_common.h"
+#include "include/porting.h"
 
 class RGWClientIO {
   bool account;

@@ -16,13 +16,13 @@
 #ifndef CEPH_DOUT_H
 #define CEPH_DOUT_H
 
-#include "global/global_context.h"
-#include "common/config.h"
-#include "common/likely.h"
-#include "common/Clock.h"
-#include "log/Log.h"
-#include "include/assert.h"
-
+//#include "global/global_context.h"
+//#include "common/config.h"
+//#include "common/likely.h"
+//#include "common/Clock.h"
+//#include "log/Log.h"
+//#include "include/assert.h"
+#include <assert.h>
 #include <iostream>
 #include <pthread.h>
 #include <streambuf>
@@ -43,7 +43,7 @@ inline std::ostream& operator<<(std::ostream& out, _bad_endl_use_dendl_t) {
 #define dout_prefix *_dout
 
 #define dout_impl(cct, sub, v)						\
-  do {									\
+  do {	/*								\
   if (cct->_conf->subsys.should_gather(sub, v)) {			\
     if (0) {								\
       char __array[((v >= -1) && (v <= 200)) ? 0 : -1] __attribute__((unused)); \
@@ -51,7 +51,7 @@ inline std::ostream& operator<<(std::ostream& out, _bad_endl_use_dendl_t) {
     ceph::log::Entry *_dout_e = cct->_log->create_entry(v, sub);	\
     ostream _dout_os(&_dout_e->m_streambuf);				\
     CephContext *_dout_cct = cct;					\
-    std::ostream* _dout = &_dout_os;
+    std::ostream* _dout = &_dout_os;*/std::ostream* _dout = &std::cout;
 
 #define lsubdout(cct, sub, v)  dout_impl(cct, ceph_subsys_##sub, v) dout_prefix
 #define ldout(cct, v)  dout_impl(cct, dout_subsys, v) dout_prefix
@@ -67,8 +67,8 @@ inline std::ostream& operator<<(std::ostream& out, _bad_endl_use_dendl_t) {
 // NOTE: depend on magic value in _ASSERT_H so that we detect when
 // /usr/include/assert.h clobbers our fancier version.
 #define dendl std::flush;				\
-  _ASSERT_H->_log->submit_entry(_dout_e);		\
-    }						\
+  /*_ASSERT_H->_log->submit_entry(_dout_e);	*/	\
+  /*  }	*/					\
   } while (0)
 
 #endif

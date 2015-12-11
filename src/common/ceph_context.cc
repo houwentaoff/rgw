@@ -15,14 +15,14 @@
 #include <time.h>
 
 #include <boost/algorithm/string.hpp>
-
+#if 0
 #include "common/admin_socket.h"
 #include "common/perf_counters.h"
 #include "common/Thread.h"
 #include "common/ceph_context.h"
 #include "common/ceph_crypto.h"
-#include "common/config.h"
-#include "common/debug.h"
+//#include "common/config.h"//sean
+//sean#include "common/debug.h"
 #include "common/HeartbeatMap.h"
 #include "common/errno.h"
 #include "common/lockdep.h"
@@ -31,18 +31,19 @@
 #include "auth/Crypto.h"
 #include "include/str_list.h"
 #include "common/Mutex.h"
-#include "common/Cond.h"
+//sean#include "common/Cond.h"
 
 #include <iostream>
 #include <pthread.h>
 
 #include "include/Spinlock.h"
-
+#endif
+#if 0
 using ceph::HeartbeatMap;
 
 namespace {
 
-class LockdepObs : public md_config_obs_t {
+class LockdepObs /*sean: public md_config_obs_t*/ {
 public:
   LockdepObs(CephContext *cct) : m_cct(cct), m_registered(false) {
   }
@@ -648,3 +649,4 @@ CryptoHandler *CephContext::get_crypto_handler(int type)
     return NULL;
   }
 }
+#endif

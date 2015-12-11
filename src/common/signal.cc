@@ -13,18 +13,18 @@
  */
 
 #include "common/BackTrace.h"
-#include "common/perf_counters.h"
-#include "global/pidfile.h"
+//#include "common/perf_counters.h"
+//#include "global/pidfile.h"
 #include "common/debug.h"
 #include "common/signal.h"
-#include "common/config.h"
+//#include "common/config.h"//sean
 
 #include <signal.h>
 #include <sstream>
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-
+using namespace std;
 std::string signal_mask_to_str()
 {
   sigset_t old_sigset;

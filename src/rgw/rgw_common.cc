@@ -18,8 +18,8 @@
 #include "common/perf_counters.h"
 #include "common/strtol.h"
 #include "include/str_list.h"
-#include "auth/Crypto.h"
-
+//#include "auth/Crypto.h"
+#include "include/porting.h"
 #include <sstream>
 
 #define dout_subsys ceph_subsys_rgw

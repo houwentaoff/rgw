@@ -7,8 +7,9 @@
 
 #include "common/ceph_json.h"
 #include "include/assert.h" /* needed because of common/ceph_json.h */
-#include "rgw_op.h"
-#include "rgw_formats.h"
+#include "include/porting.h"
+//#include "rgw_op.h"
+//#include "rgw_formats.h"
 
 
 extern std::map<std::string, std::string> rgw_to_http_attrs;

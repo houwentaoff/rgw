@@ -11,7 +11,7 @@
 #include "rgw_common.h"
 #include "rgw_tools.h"
 
-#include "rgw_rados.h"
+//#include "rgw_rados.h"
 
 #include "rgw_string.h"
 

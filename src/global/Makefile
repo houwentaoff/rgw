@@ -23,7 +23,7 @@ INCLUDES 		 = -I../
 
 include ../lib.rules
 
-LIB_OBJS 		 = global_init.o global_context.o
+LIB_OBJS 		 = pidfile.o global_init.o global_context.o
 
 MODULE_TARGETS = $(MODULE_LIBS)
 

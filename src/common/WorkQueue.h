@@ -15,15 +15,16 @@
 #ifndef CEPH_WORKQUEUE_H
 #define CEPH_WORKQUEUE_H
 
+#include "include/porting.h"
 #include "Mutex.h"
 #include "Cond.h"
 #include "Thread.h"
 #include "include/unordered_map.h"
 #include "common/config_obs.h"
-#include "common/HeartbeatMap.h"
+#include "include/atomic.h"
+//#include "common/HeartbeatMap.h"
 
 class CephContext;
-
 /// Pool of threads that share work submitted to multiple work queues.
 class ThreadPool : public md_config_obs_t {
   CephContext *cct;

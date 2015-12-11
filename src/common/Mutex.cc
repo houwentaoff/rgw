@@ -14,8 +14,9 @@
 #include <string>
 
 #include "common/Mutex.h"
-#include "common/perf_counters.h"
-#include "common/ceph_context.h"
+//#include "common/perf_counters.h"
+//#include "common/ceph_context.h"
+#include "include/porting.h"
 #include "common/config.h"
 #include "include/stringify.h"
 #include "include/utime.h"
@@ -27,6 +28,7 @@ Mutex::Mutex(const std::string &n, bool r, bool ld,
   name(n), id(-1), recursive(r), lockdep(ld), backtrace(bt), nlock(0),
   locked_by(0), cct(cct), logger(0)
 {
+#if 0    
   if (cct) {
     PerfCountersBuilder b(cct, string("mutex-") + name,
 			  l_mutex_first, l_mutex_last);
@@ -35,6 +37,7 @@ Mutex::Mutex(const std::string &n, bool r, bool ld,
     cct->get_perfcounters_collection()->add(logger);
     logger->set(l_mutex_wait, 0);
   }
+#endif
   if (recursive) {
     // Mutexes of type PTHREAD_MUTEX_RECURSIVE do all the same checks as
     // mutexes of type PTHREAD_MUTEX_ERRORCHECK.
@@ -73,7 +76,7 @@ Mutex::~Mutex() {
   assert(nlock == 0);
   pthread_mutex_destroy(&_m);
   if (cct && logger) {
-    cct->get_perfcounters_collection()->remove(logger);
+//    cct->get_perfcounters_collection()->remove(logger);
     delete logger;
   }
   if (lockdep && g_lockdep) {
@@ -86,7 +89,7 @@ void Mutex::Lock(bool no_lockdep) {
 
   if (lockdep && g_lockdep && !no_lockdep) _will_lock();
 
-  if (logger && cct && cct->_conf->mutex_perf_counter) {
+  if (logger && cct /*&& cct->_conf->mutex_perf_counter*/) {
     utime_t start;
     // instrumented mutex enabled
     start = ceph_clock_now(cct);
@@ -96,8 +99,8 @@ void Mutex::Lock(bool no_lockdep) {
 
     r = pthread_mutex_lock(&_m);
 
-    logger->tinc(l_mutex_wait,
-		 ceph_clock_now(cct) - start);
+   /* logger->tinc(l_mutex_wait,
+		 ceph_clock_now(cct) - start);*/
   } else {
     r = pthread_mutex_lock(&_m);
   }

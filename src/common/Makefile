@@ -23,7 +23,12 @@ INCLUDES 		 =  -I../
 
 include ../lib.rules
 
-LIB_OBJS = BackTrace.o WorkQueue.o dout.o
+BASE_OBJS = signal.o io_priority.o simple_spin.o buffer.o safe_io.o str_list.o ceph_json.o mime.o utf8.o armor.o WorkQueue.o  Thread.o page.o Mutex.o  Formatter.o Clock.o lockdep.o environment.o code_environment.o PrebufferedStreambuf.o strtol.o dout.o BackTrace.o # WorkQueue.o Thread.o Clock.o# entity_name.o ceph_context.o ceph_crypto.o admin_socket.o \
+		   signal.o Thread.o code_environment.o admin_socket_client.o errno.o safe_io.o armor.o Clock.o  \
+		   
+
+LIB_OBJS  =
+LIB_OBJS += $(BASE_OBJS)
 
 MODULE_TARGETS = $(MODULE_LIBS)
 

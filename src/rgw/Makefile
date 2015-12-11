@@ -21,13 +21,15 @@ INCLUDES 	 = -I../
 
 include ../lib.rules
 
-LOCAL_LIBS 	 = ../common/libcommon.a ../global/libglobal.a ../include/libinclude.a \
-			   ../cls/libcls.a ../auth/libauth.a ../json_spirit/libjson_spirit.a   \
+LOCAL_LIBS 	 = ../common/libcommon.a ../json_spirit/libjson_spirit.a \
+			   ../cls/libcls.a #../global/libglobal.a ../include/libinclude.a \
+			    ../auth/libauth.a    \
 			   ../log/liblog.a ../msg/libmsg.a 
 
-LD = $(SYS_LIBS) -pthread -lfcgi 
+LD = $(SYS_LIBS) -pthread -lfcgi -lcurl
 
 RGW_SERVER  := rgw
+TEST_RGW 	:= test_main
 
 all:$(RGW_SERVER) 
 	@echo -e "\033[5;41;32m Building $(MODULE_NAME) ... \033[0m"
@@ -35,12 +37,18 @@ all:$(RGW_SERVER)
 
 RGW_OBJS  	  =  rgw_env.o rgw_fcgi.o rgw_client_io.o rgw_common.o \
 			     rgw_op.o rgw_rest.o  rgw_rest_s3.o rgw_main.o 
+TEST_OBJS 	  =  test_main.o rgw_client_io.o rgw_fcgi.o porting_rest.o \
+				 porting_op.o
+				  #rgw_common.o #rgw_op.o
 
-$(RGW_SERVER): $(LOCAL_LIBS) $(RGW_OBJS)
+$(RGW_SERVER): $(RGW_OBJS) $(LOCAL_LIBS)
 		@$(CXX) $^ -o $@ $(LD)
+
+$(TEST_RGW): $(TEST_OBJS) $(LOCAL_LIBS) 
+		$(CXX) $^ -o $@ $(LD)
 
 .PHONY:clean
 
 clean:
 	-@echo -e "\033[5;41;32m Cleaning $(MODULE_NAME) ... \033[0m"
-	-$(RM) *.o $(MODULE_TARGETS) $(LIB_OBJS)
+	-$(RM) *.o $(MODULE_TARGETS) $(LIB_OBJS) $(TEST_OBJS) $(TEST_RGW)

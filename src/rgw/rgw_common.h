@@ -15,9 +15,9 @@
 #ifndef CEPH_RGW_COMMON_H
 #define CEPH_RGW_COMMON_H
 
-#include "common/ceph_crypto.h"
+//#include "common/ceph_crypto.h"
 #include "common/debug.h"
-#include "common/perf_counters.h"
+//#include "common/perf_counters.h"
 
 #include "acconfig.h"
 
@@ -31,10 +31,12 @@
 #include "rgw_cors.h"
 #include "rgw_quota.h"
 #include "rgw_string.h"
-#include "cls/version/cls_version_types.h"
-#include "cls/user/cls_user_types.h"
+//#include "cls/version/cls_version_types.h"
+//#include "cls/user/cls_user_types.h"
 #include "cls/rgw/cls_rgw_types.h"
-#include "include/rados/librados.hpp"
+#include "include/porting.h"
+#include "include/encoding.h"
+//sean#include "include/rados/librados.hpp"
 
 using namespace std;
 
@@ -299,7 +301,7 @@ class RGWHTTPArgs
     }
   }
 };
-
+#if 0
 class RGWConf;
 
 class RGWEnv {
@@ -336,7 +338,7 @@ public:
   int enable_usage_log;
   uint8_t defer_to_bucket_acls;
 };
-
+#endif
 enum http_op {
   OP_GET,
   OP_PUT,
@@ -350,7 +352,7 @@ enum http_op {
 
 class RGWAccessControlPolicy;
 class JSONObj;
-
+#if 0
 struct RGWAccessKey {
   string id; // AccessKey
   string key; // SecretKey
@@ -587,7 +589,7 @@ struct RGWUserInfo
   }
 };
 WRITE_CLASS_ENCODER(RGWUserInfo)
-
+#endif
 struct rgw_bucket {
   std::string name;
   std::string data_pool;
@@ -743,8 +745,8 @@ struct RGWObjVersionTracker {
     return &read_version;
   }
 
-  void prepare_op_for_read(librados::ObjectReadOperation *op);
-  void prepare_op_for_write(librados::ObjectWriteOperation *op);
+  //void prepare_op_for_read(librados::ObjectReadOperation *op);
+  //void prepare_op_for_write(librados::ObjectWriteOperation *op);
 
   void apply_write() {
     read_version = write_version;

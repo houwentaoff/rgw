@@ -57,8 +57,11 @@ static BackTrace *follows[MAX_LOCKS][MAX_LOCKS];       // follows[a][b] means b 
 
 static bool lockdep_force_backtrace()
 {
+#if 0
   return (g_lockdep_ceph_ctx != NULL &&
           g_lockdep_ceph_ctx->_conf->lockdep_force_backtrace);
+#endif
+  return true;
 }
 
 /******* Functions **********/

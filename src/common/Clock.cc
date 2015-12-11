@@ -14,8 +14,8 @@
 
 
 #include "common/Clock.h"
-#include "common/ceph_context.h"
-#include "common/config.h"
+//#include "common/ceph_context.h"
+//#include "common/config.h"
 #include "include/utime.h"
 
 #include <time.h>
@@ -31,15 +31,15 @@ utime_t ceph_clock_now(CephContext *cct)
   gettimeofday(&tv, NULL);
   utime_t n(&tv);
 #endif
-  if (cct)
-    n += cct->_conf->clock_offset;
+//  if (cct)
+//    n += cct->_conf->clock_offset;
   return n;
 }
 
 time_t ceph_clock_gettime(CephContext *cct)
 {
   time_t ret = time(NULL);
-  if (cct)
-    ret += ((time_t)cct->_conf->clock_offset);
+//  if (cct)
+//    ret += ((time_t)cct->_conf->clock_offset);
   return ret;
 }

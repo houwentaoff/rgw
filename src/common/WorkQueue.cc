@@ -20,7 +20,7 @@
 #include "WorkQueue.h"
 
 #include "common/config.h"
-#include "common/HeartbeatMap.h"
+//#include "common/HeartbeatMap.h"
 
 #define dout_subsys ceph_subsys_tp
 #undef dout_prefix
@@ -54,13 +54,13 @@ ThreadPool::ThreadPool(CephContext *cct_, string nm, int n, const char *option)
 
 void ThreadPool::TPHandle::suspend_tp_timeout()
 {
-  cct->get_heartbeat_map()->clear_timeout(hb);
+//  cct->get_heartbeat_map()->clear_timeout(hb);
 }
 
 void ThreadPool::TPHandle::reset_tp_timeout()
 {
-  cct->get_heartbeat_map()->reset_timeout(
-    hb, grace, suicide_grace);
+//  cct->get_heartbeat_map()->reset_timeout(
+//    hb, grace, suicide_grace);
 }
 
 ThreadPool::~ThreadPool()
@@ -95,8 +95,8 @@ void ThreadPool::worker(WorkThread *wt)
   
   std::stringstream ss;
   ss << name << " thread " << (void*)pthread_self();
-  heartbeat_handle_d *hb = cct->get_heartbeat_map()->add_worker(ss.str());
-
+//  heartbeat_handle_d *hb = cct->get_heartbeat_map()->add_worker(ss.str());
+  heartbeat_handle_d *hb;
   while (!_stop) {
 
     // manage dynamic thread pool
@@ -142,17 +142,17 @@ void ThreadPool::worker(WorkThread *wt)
     }
 
     ldout(cct,20) << "worker waiting" << dendl;
-    cct->get_heartbeat_map()->reset_timeout(
-      hb,
-      cct->_conf->threadpool_default_timeout,
-      0);
-    _cond.WaitInterval(cct, _lock,
-      utime_t(
-	cct->_conf->threadpool_empty_queue_max_wait, 0));
+//    cct->get_heartbeat_map()->reset_timeout(
+//      hb,
+//      cct->_conf->threadpool_default_timeout,
+//      0);
+//    _cond.WaitInterval(cct, _lock,
+//      utime_t(
+//	cct->_conf->threadpool_empty_queue_max_wait, 0));
   }
   ldout(cct,1) << "worker finish" << dendl;
 
-  cct->get_heartbeat_map()->remove_worker(hb);
+//  cct->get_heartbeat_map()->remove_worker(hb);
 
   _lock.Unlock();
 }
@@ -190,7 +190,7 @@ void ThreadPool::start()
 
   if (_thread_num_option.length()) {
     ldout(cct, 10) << " registering config observer on " << _thread_num_option << dendl;
-    cct->_conf->add_observer(this);
+//    cct->_conf->add_observer(this);
   }
 
   _lock.Lock();
@@ -205,7 +205,7 @@ void ThreadPool::stop(bool clear_after)
 
   if (_thread_num_option.length()) {
     ldout(cct, 10) << " unregistering config observer on " << _thread_num_option << dendl;
-    cct->_conf->remove_observer(this);
+//    cct->_conf->remove_observer(this);
   }
 
   _lock.Lock();
@@ -298,7 +298,8 @@ void ShardedThreadPool::shardedthreadpool_worker(uint32_t thread_index)
 
   std::stringstream ss;
   ss << name << " thread " << (void*)pthread_self();
-  heartbeat_handle_d *hb = cct->get_heartbeat_map()->add_worker(ss.str());
+//  heartbeat_handle_d *hb = cct->get_heartbeat_map()->add_worker(ss.str());
+  heartbeat_handle_d *hb;
 
   while (!stop_threads.read()) {
     if(pause_threads.read()) {
@@ -306,12 +307,12 @@ void ShardedThreadPool::shardedthreadpool_worker(uint32_t thread_index)
       ++num_paused;
       wait_cond.Signal();
       while(pause_threads.read()) {
-       cct->get_heartbeat_map()->reset_timeout(
-	 hb,
-	 wq->timeout_interval, wq->suicide_interval);
-       shardedpool_cond.WaitInterval(cct, shardedpool_lock,
-	 utime_t(
-	   cct->_conf->threadpool_empty_queue_max_wait, 0));
+//       cct->get_heartbeat_map()->reset_timeout(
+//	 hb,
+//	 wq->timeout_interval, wq->suicide_interval);
+//       shardedpool_cond.WaitInterval(cct, shardedpool_lock,
+//	 utime_t(
+//	   cct->_conf->threadpool_empty_queue_max_wait, 0));
       }
       --num_paused;
       shardedpool_lock.Unlock();
@@ -322,28 +323,28 @@ void ShardedThreadPool::shardedthreadpool_worker(uint32_t thread_index)
         ++num_drained;
         wait_cond.Signal();
         while (drain_threads.read()) {
-	  cct->get_heartbeat_map()->reset_timeout(
-	    hb,
-	    wq->timeout_interval, wq->suicide_interval);
-          shardedpool_cond.WaitInterval(cct, shardedpool_lock,
-	    utime_t(
-	      cct->_conf->threadpool_empty_queue_max_wait, 0));
+//	  cct->get_heartbeat_map()->reset_timeout(
+//	    hb,
+//	    wq->timeout_interval, wq->suicide_interval);
+//          shardedpool_cond.WaitInterval(cct, shardedpool_lock,
+//	    utime_t(
+//	      cct->_conf->threadpool_empty_queue_max_wait, 0));
         }
         --num_drained;
       }
       shardedpool_lock.Unlock();
     }
 
-    cct->get_heartbeat_map()->reset_timeout(
-      hb,
-      wq->timeout_interval, wq->suicide_interval);
+//    cct->get_heartbeat_map()->reset_timeout(
+//      hb,
+//      wq->timeout_interval, wq->suicide_interval);
     wq->_process(thread_index, hb);
 
   }
 
   ldout(cct,10) << "sharded worker finish" << dendl;
 
-  cct->get_heartbeat_map()->remove_worker(hb);
+//  cct->get_heartbeat_map()->remove_worker(hb);
 
 }
 

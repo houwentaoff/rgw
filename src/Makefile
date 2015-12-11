@@ -12,7 +12,7 @@
 # without the prior consent of Sobey, Inc.
 # 
 # ###############################################
-SUBDIRS=common global rgw include msg log cls auth json_spirit
+SUBDIRS=common global include msg log cls auth json_spirit rgw
 MODULE_NAME  	:= s3
 #MAKE=make
 

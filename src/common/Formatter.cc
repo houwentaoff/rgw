@@ -18,7 +18,7 @@
 
 #include "assert.h"
 #include "Formatter.h"
-#include "common/escape.h"
+//#include "common/escape.h"
 
 #include <iostream>
 #include <sstream>
@@ -162,10 +162,12 @@ void JSONFormatter::print_comma(json_formatter_stack_entry_d& entry)
 
 void JSONFormatter::print_quoted_string(const std::string& s)
 {
+#if 0
   int len = escape_json_attr_len(s.c_str(), s.size());
   char escaped[len];
   escape_json_attr(s.c_str(), s.size(), escaped);
   m_ss << '\"' << escaped << '\"';
+#endif
 }
 
 void JSONFormatter::print_name(const char *name)
@@ -515,10 +517,13 @@ void XMLFormatter::print_spaces()
 
 std::string XMLFormatter::escape_xml_str(const char *str)
 {
+#if 0    
   int len = escape_xml_attr_len(str);
   std::vector<char> escaped(len, '\0');
   escape_xml_attr(str, &escaped[0]);
   return std::string(&escaped[0]);
+#endif
+return "";
 }
 
 TableFormatter::TableFormatter(bool keyval) : m_keyval(keyval)

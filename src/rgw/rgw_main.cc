@@ -22,7 +22,7 @@
 
 #include "rgw_fcgi.h"
 
-#include "common/ceph_argparse.h"
+//sean#include "common/ceph_argparse.h"
 #include "global/global_init.h"
 #include "global/signal_handler.h"
 #include "common/config.h"
@@ -35,13 +35,13 @@
 #include "include/compat.h"
 #include "include/str_list.h"
 #include "rgw_common.h"
-#include "rgw_rados.h"
-#include "rgw_acl.h"
+//sean#include "rgw_rados.h"
+//sean#include "rgw_acl.h"
 #include "rgw_user.h"
 #include "rgw_op.h"
 #include "rgw_rest.h"
 #include "rgw_rest_s3.h"
-#include "rgw_rest_swift.h"
+//sean#include "rgw_rest_swift.h"
 #include "rgw_rest_admin.h"
 #include "rgw_rest_usage.h"
 #include "rgw_rest_user.h"
@@ -52,16 +52,16 @@
 #include "rgw_replica_log.h"
 #include "rgw_rest_replica_log.h"
 #include "rgw_rest_config.h"
-#include "rgw_swift_auth.h"
-#include "rgw_swift.h"
+//sean#include "rgw_swift_auth.h"
+//sean#include "rgw_swift.h"
 #include "rgw_log.h"
 #include "rgw_tools.h"
 #include "rgw_resolve.h"
-#include "rgw_loadgen.h"
-#include "rgw_civetweb.h"
-#include "rgw_civetweb_log.h"
+//sean#include "rgw_loadgen.h"
+//sean#include "rgw_civetweb.h"
+//sean#include "rgw_civetweb_log.h"
 
-#include "civetweb/civetweb.h"
+//sean#include "civetweb/civetweb.h"
 
 #include <map>
 #include <string>
@@ -362,7 +362,7 @@ void RGWFCGXProcess::run()
     FCGX_Finish_r(&fcgx_reqs[i]);
   }
 }
-
+#if 0
 struct RGWLoadGenRequest : public RGWRequest {
   string method;
   string resource;
@@ -478,7 +478,7 @@ void RGWLoadGenProcess::gen_request(const string& method, const string& resource
   req_throttle.get(1);
   req_wq.queue(req);
 }
-
+#endif
 static void signal_shutdown()
 {
   if (!disable_signal_fd.read()) {
@@ -676,7 +676,7 @@ void RGWFCGXProcess::handle_request(RGWRequest *r)
 
   delete req;
 }
-
+#if 0
 void RGWLoadGenProcess::handle_request(RGWRequest *r)
 {
   RGWLoadGenRequest *req = static_cast<RGWLoadGenRequest *>(r);
@@ -730,7 +730,7 @@ static int civetweb_callback(struct mg_connection *conn) {
 // Mark as processed
   return 1;
 }
-
+#endif
 #ifdef HAVE_CURL_MULTI_WAIT
 static void check_curl()
 {
@@ -763,7 +763,7 @@ int usage()
   cerr << "  --keyring=<path>          path to radosgw keyring\n";
   cerr << "  --logfile=<logfile>       file to log debug output\n";
   cerr << "  --debug-rgw=<log-level>/<memory-level>  set radosgw debug level\n";
-  generic_server_usage();
+//sean  generic_server_usage();
 
   return 0;
 }
@@ -907,7 +907,7 @@ public:
     return 0;
   }
 };
-
+#if 0
 class RGWLoadGenFrontend : public RGWProcessFrontend {
 public:
   RGWLoadGenFrontend(RGWProcessEnv& pe, RGWFrontendConfig *_conf) : RGWProcessFrontend(pe, _conf) {}
@@ -1009,7 +1009,7 @@ public:
   void join() {
   }
 };
-
+#endif
 /*
  * start up the RADOS connection and then handle HTTP messages as they come in
  */
@@ -1018,7 +1018,7 @@ int main(int argc, const char **argv)
   // dout() messages will be sent to stderr, but FCGX wants messages on stdout
   // Redirect stderr to stdout.
  /* :TODO:2015年12月08日 17时02分14秒:hwt:  */
-#if 0
+#if 1
   TEMP_FAILURE_RETRY(close(STDERR_FILENO));
   if (TEMP_FAILURE_RETRY(dup2(STDOUT_FILENO, STDERR_FILENO) < 0)) {
     int err = errno;
@@ -1033,77 +1033,77 @@ int main(int argc, const char **argv)
   def_args.push_back("--keyring=$rgw_data/keyring");
 
   vector<const char*> args;
-  argv_to_vec(argc, argv, args);
-  env_to_vec(args);
-  global_init(&def_args, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_DAEMON,
-	      CINIT_FLAG_UNPRIVILEGED_DAEMON_DEFAULTS);
+//  argv_to_vec(argc, argv, args);
+//  env_to_vec(args);
+//  global_init(&def_args, args, CEPH_ENTITY_TYPE_CLIENT, CODE_ENVIRONMENT_DAEMON,
+//	      CINIT_FLAG_UNPRIVILEGED_DAEMON_DEFAULTS);
 
   for (std::vector<const char*>::iterator i = args.begin(); i != args.end(); ++i) {
-    if (ceph_argparse_flag(args, i, "-h", "--help", (char*)NULL)) {
-      usage();
-      return 0;
-    }
+//    if (ceph_argparse_flag(args, i, "-h", "--help", (char*)NULL)) {
+//      usage();
+//      return 0;
+//    }
   }
 
   check_curl();
 
-  if (g_conf->daemonize) {
-    global_init_daemonize(g_ceph_context);
-  }
-  Mutex mutex("main");
-  SafeTimer init_timer(g_ceph_context, mutex);
-  init_timer.init();
-  mutex.Lock();
-  init_timer.add_event_after(g_conf->rgw_init_timeout, new C_InitTimeout);
-  mutex.Unlock();
+//  if (g_conf->daemonize) {
+//    global_init_daemonize(g_ceph_context);
+//  }
+//  Mutex mutex("main");
+//  SafeTimer init_timer(g_ceph_context, mutex);
+//  init_timer.init();
+//  mutex.Lock();
+//  init_timer.add_event_after(g_conf->rgw_init_timeout, new C_InitTimeout);
+//  mutex.Unlock();
 
   // Enable the perf counter before starting the service thread
-  g_ceph_context->enable_perf_counter();
+//  g_ceph_context->enable_perf_counter();
 
-  common_init_finish(g_ceph_context);
+//  common_init_finish(g_ceph_context);
 
-  rgw_tools_init(g_ceph_context);
+//  rgw_tools_init(g_ceph_context);
 
-  rgw_init_resolver();
+//  rgw_init_resolver();
   
   curl_global_init(CURL_GLOBAL_ALL);
   
   FCGX_Init();
 
   int r = 0;
-  RGWRados *store = RGWStoreManager::get_storage(g_ceph_context,
-      g_conf->rgw_enable_gc_threads, g_conf->rgw_enable_quota_threads);
+  RGWRados *store ;//= RGWStoreManager::get_storage(g_ceph_context,
+      //g_conf->rgw_enable_gc_threads, g_conf->rgw_enable_quota_threads);
   if (!store) {
-    mutex.Lock();
-    init_timer.cancel_all_events();
-    init_timer.shutdown();
-    mutex.Unlock();
+//    mutex.Lock();
+//    init_timer.cancel_all_events();
+//    init_timer.shutdown();
+//    mutex.Unlock();
 
     derr << "Couldn't init storage provider (RADOS)" << dendl;
     return EIO;
   }
-  r = rgw_perf_start(g_ceph_context);
+//  r = rgw_perf_start(g_ceph_context);
 
-  rgw_rest_init(g_ceph_context, store->region);
+//  rgw_rest_init(g_ceph_context, store->region);
 
-  mutex.Lock();
-  init_timer.cancel_all_events();
-  init_timer.shutdown();
-  mutex.Unlock();
+//  mutex.Lock();
+//  init_timer.cancel_all_events();
+//  init_timer.shutdown();
+//  mutex.Unlock();
 
   if (r) 
     return 1;
 
-  rgw_user_init(store);
-  rgw_bucket_init(store->meta_mgr);
-  rgw_log_usage_init(g_ceph_context, store);
+//  rgw_user_init(store);
+//  rgw_bucket_init(store->meta_mgr);
+//  rgw_log_usage_init(g_ceph_context, store);
 
   RGWREST rest;
 
   list<string> apis;
   bool do_swift = false;
-
-  get_str_list(g_conf->rgw_enable_apis, apis);
+  string rgw_enable_apis;
+  get_str_list(rgw_enable_apis/*g_conf->rgw_enable_apis*/, apis);
 
   map<string, bool> apis_map;
   for (list<string>::iterator li = apis.begin(); li != apis.end(); ++li) {
@@ -1112,7 +1112,7 @@ int main(int argc, const char **argv)
 
   if (apis_map.count("s3") > 0)
     rest.register_default_mgr(set_logging(new RGWRESTMgr_S3));
-
+#if 0
   if (apis_map.count("swift") > 0) {
     do_swift = true;
     swift_init(g_ceph_context);
@@ -1121,7 +1121,7 @@ int main(int argc, const char **argv)
 
   if (apis_map.count("swift_auth") > 0)
     rest.register_resource(g_conf->rgw_swift_auth_entry, set_logging(new RGWRESTMgr_SWIFT_Auth));
-
+#endif
   if (apis_map.count("admin") > 0) {
     RGWRESTMgr_Admin *admin_resource = new RGWRESTMgr_Admin;
     admin_resource->register_resource("usage", new RGWRESTMgr_Usage);
@@ -1138,19 +1138,19 @@ int main(int argc, const char **argv)
   }
 
   OpsLogSocket *olog = NULL;
-
+#if 0
   if (!g_conf->rgw_ops_log_socket_path.empty()) {
     olog = new OpsLogSocket(g_ceph_context, g_conf->rgw_ops_log_data_backlog);
     olog->init(g_conf->rgw_ops_log_socket_path);
   }
-
+#endif
   r = signal_fd_init();
   if (r < 0) {
     derr << "ERROR: unable to initialize signal fds" << dendl;
     exit(1);
   }
 
-  init_async_signal_handler();
+//  init_async_signal_handler();
   register_async_signal_handler(SIGHUP, sighup_handler);
   register_async_signal_handler(SIGTERM, handle_sigterm);
   register_async_signal_handler(SIGINT, handle_sigterm);
@@ -1158,7 +1158,7 @@ int main(int argc, const char **argv)
   sighandler_alrm = signal(SIGALRM, godown_alarm);
 
   list<string> frontends;
-  get_str_list(g_conf->rgw_frontends, ",", frontends);
+//  get_str_list(g_conf->rgw_frontends, ",", frontends);
 
   multimap<string, RGWFrontendConfig *> fe_map;
   list<RGWFrontendConfig *> configs;
@@ -1191,7 +1191,9 @@ int main(int argc, const char **argv)
       RGWProcessEnv fcgi_pe = { store, &rest, olog, 0 };
 
       fe = new RGWFCGXFrontend(fcgi_pe, config);
-    } else if (framework == "civetweb" || framework == "mongoose") {
+    } 
+#if 0
+    else if (framework == "civetweb" || framework == "mongoose") {
       int port;
       config->get_val("port", 80, &port);
 
@@ -1205,7 +1207,9 @@ int main(int argc, const char **argv)
       RGWProcessEnv env = { store, &rest, olog, port };
 
       fe = new RGWLoadGenFrontend(env, config);
-    } else {
+    }
+#endif
+    else {
       dout(0) << "WARNING: skipping unknown framework: " << framework << dendl;
       continue;
     }
@@ -1221,7 +1225,7 @@ int main(int argc, const char **argv)
   }
 
   wait_shutdown();
-
+#if 0
   derr << "shutting down" << dendl;
 
   for (list<RGWFrontend *>::iterator liter = fes.begin(); liter != fes.end(); ++liter) {
@@ -1264,7 +1268,7 @@ int main(int argc, const char **argv)
 
   dout(1) << "final shutdown" << dendl;
   g_ceph_context->put();
-
+#endif
   signal_fd_finalize();
 #endif
  /* :TODO:End---  */

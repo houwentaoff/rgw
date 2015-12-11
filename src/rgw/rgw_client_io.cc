@@ -11,7 +11,7 @@
 
 void RGWClientIO::init(CephContext *cct) {
   init_env(cct);
-
+/*
   if (cct->_conf->subsys.should_gather(ceph_subsys_rgw, 20)) {
     std::map<string, string, ltstr_nocase>& env_map = env.get_map();
     std::map<string, string, ltstr_nocase>::iterator iter = env_map.begin();
@@ -20,6 +20,7 @@ void RGWClientIO::init(CephContext *cct) {
       ldout(cct, 20) << iter->first << "=" << iter->second << dendl;
     }
   }
+  */
 }
 
 

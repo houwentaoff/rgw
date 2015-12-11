@@ -56,7 +56,7 @@ using ceph::bufferlist;
 class CephContext {
 public:
   CephContext(uint32_t module_type_, int init_flags_ = 0);
-
+#if 0
   // ref count!
 private:
   ~CephContext();
@@ -223,7 +223,7 @@ private:
   };
   PerfCounters *_cct_perf;
   ceph_spinlock_t _cct_perf_lock;
-
+#endif
   friend class CephContextObs;
 };
 
