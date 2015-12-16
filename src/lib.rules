@@ -59,7 +59,7 @@ ECHO=echo
 
 DESTDIR=
 #debug 
-V=1
+V=0
 
 Q=@
 E=echo
@@ -70,12 +70,12 @@ endif
 
 #CPP
 %.o:%.cc
-	$(Q)$(CXX) -c $< -o $@ $(CPLUSPLUS_FLAGS)
+	$(Q)$(CXX) -g -c $< -o $@ $(CPLUSPLUS_FLAGS)
 	@$(E) "  CXX " $<
 %.o:%.cpp
-	$(Q)$(CXX) -c $< -o $@ $(CPLUSPLUS_FLAGS)
+	$(Q)$(CXX) -g -c $< -o $@ $(CPLUSPLUS_FLAGS)
 	@$(E) "  CXX " $<
 #C
 %.o:%.c
-	$(Q)$(CC) -c $< -o $@ $(C_FLAGS)
+	$(Q)$(CC) -g -c $< -o $@ $(C_FLAGS)
 	@$(E) "  CC  " $<

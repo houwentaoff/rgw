@@ -69,7 +69,7 @@ using namespace std;
 #include "acconfig.h"
 
 #include "assert.h"
-
+//#include <assert.h>
 // DARWIN compatibility
 #ifdef DARWIN
 typedef long long loff_t;

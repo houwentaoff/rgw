@@ -23,25 +23,25 @@
 #include "porting_op.h"
 
 class RGWRESTMgr {
-  bool should_log;
-protected:
-  map<string, RGWRESTMgr *> resource_mgrs;
-  multimap<size_t, string> resources_by_size;
-  RGWRESTMgr *default_mgr;
+    bool should_log;
+    protected:
+    map<string, RGWRESTMgr *> resource_mgrs;
+    multimap<size_t, string> resources_by_size;
+    RGWRESTMgr *default_mgr;
 
-public:
-  RGWRESTMgr() : should_log(false), default_mgr(NULL) {}
-  virtual ~RGWRESTMgr();
+    public:
+    RGWRESTMgr() : should_log(false), default_mgr(NULL) {}
+    virtual ~RGWRESTMgr();
 
-  void register_resource(string resource, RGWRESTMgr *mgr);
-  void register_default_mgr(RGWRESTMgr *mgr);
+    void register_resource(string resource, RGWRESTMgr *mgr);
+    void register_default_mgr(RGWRESTMgr *mgr);
 
-  virtual RGWRESTMgr *get_resource_mgr(struct req_state *s, const string& uri, string *out_uri);
-  virtual RGWHandler *get_handler(struct req_state *s) { return NULL; }
-  virtual void put_handler(RGWHandler *handler) { delete handler; }
+    virtual RGWRESTMgr *get_resource_mgr(struct req_state *s, const string& uri, string *out_uri);
+    virtual RGWHandler *get_handler(struct req_state *s) { return NULL; }
+    virtual void put_handler(RGWHandler *handler) { delete handler; }
 
-  void set_logging(bool _should_log) { should_log = _should_log; }
-  bool get_logging() { return should_log; }
+    void set_logging(bool _should_log) { should_log = _should_log; }
+    bool get_logging() { return should_log; }
 };
 
 class RGWREST {
@@ -66,4 +66,28 @@ class RGWREST {
         mgr.register_default_mgr(m);
     }
 };
+class RGWHandler_ObjStore : public RGWHandler {
+    protected:
+        virtual bool is_obj_update_op() { return false; }
+        virtual RGWOp *op_get() { return NULL; }
+        virtual RGWOp *op_put() { return NULL; }
+        virtual RGWOp *op_delete() { return NULL; }
+        virtual RGWOp *op_head() { return NULL; }
+        virtual RGWOp *op_post() { return NULL; }
+        virtual RGWOp *op_copy() { return NULL; }
+        virtual RGWOp *op_options() { return NULL; }
+
+        virtual int validate_bucket_name(const string& bucket);
+        virtual int validate_object_name(const string& object);
+
+        static int allocate_formatter(struct req_state *s, int default_formatter, bool configurable);
+    public:
+        RGWHandler_ObjStore() {}
+        virtual ~RGWHandler_ObjStore() {}
+        int read_permissions(RGWOp *op);
+
+        virtual int authorize() = 0;
+};
+
+
 #endif

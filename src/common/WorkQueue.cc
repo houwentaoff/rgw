@@ -74,7 +74,7 @@ void ThreadPool::handle_conf_change(const struct md_config_t *conf,
 {
   if (changed.count(_thread_num_option)) {
     char *buf;
-    int r = conf->get_val(_thread_num_option.c_str(), &buf, -1);
+    int r = 0;//conf->get_val(_thread_num_option.c_str(), &buf, -1);
     assert(r >= 0);
     int v = atoi(buf);
     free(buf);

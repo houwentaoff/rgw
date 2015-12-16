@@ -59,10 +59,25 @@ struct cls_user_bucket
     std::string bucket_id;
     std::string data_extra_pool;
 };
+class Throttle 
+{
+    public:
+        Throttle(){};
+        Throttle(CephContext *cct, const std::string& n, int64_t m = 0, bool _use_perf = true){};
+        ~Throttle(){};
+};
+class OpsLogSocket
+{
+    public:
+        OpsLogSocket(){}
+        ~OpsLogSocket(){}
+};
+#if 0
 class   RGWEnv
 {
 
 };
+#endif
 class RGWRados
 {
 

@@ -39,12 +39,14 @@
 //#include "common/errno.h"
 #include "common/WorkQueue.h"
 #include "common/Timer.h"
-#include "common/Throttle.h"
+//#include "common/Throttle.h"
 #include "common/QueueRing.h"
 #include "common/safe_io.h"
 #include "include/str_list.h"
 #include "porting_op.h"
 #include "porting_rest.h"
+#include "porting_rest_s3.h"
+#include "porting_rest_admin.h"
 #include "porting_common.h"
 
 #include <map>
@@ -56,14 +58,19 @@
 #include "include/types.h"
 #include "common/BackTrace.h"
 #include <errno.h>
+#include "porting_rest_bucket.h"
+
+#define SOCKET_BACKLOG 1024
+
+CephContext *g_ceph_context = NULL;
 
 class RGWProcess;
 
 struct RGWProcessEnv {
   RGWRados *store;
   RGWREST *rest;
-//  OpsLogSocket *olog;
-  int *olog;
+  OpsLogSocket *olog;
+//  int *olog;
   int port;
 };
 
@@ -131,13 +138,77 @@ public:
 
   string get_framework() { return framework; }
 };
+int RGWFrontendConfig::parse_config(const string& config, map<string, string>& config_map)
+{
+  list<string> config_list;
+  get_str_list(config, " ", config_list);
+
+  list<string>::iterator iter;
+  for (iter = config_list.begin(); iter != config_list.end(); ++iter) {
+    string& entry = *iter;
+    string key;
+    string val;
+
+    if (framework.empty()) {
+      framework = entry;
+      dout(0) << "framework: " << framework << dendl;
+      continue;
+    }
+
+    ssize_t pos = entry.find('=');
+    if (pos < 0) {
+      dout(0) << "framework conf key: " << entry << dendl;
+      config_map[entry] = "";
+      continue;
+    }
+
+    int ret = parse_key_value(entry, key, val);
+    if (ret < 0) {
+      cerr << "ERROR: can't parse " << entry << std::endl;
+      return ret;
+    }
+
+    dout(0) << "framework conf key: " << key << ", val: " << val << dendl;
+    config_map[key] = val;
+  }
+
+  return 0;
+}
+
+bool RGWFrontendConfig::get_val(const string& key, const string& def_val, string *out)
+{
+ map<string, string>::iterator iter = config_map.find(key);
+ if (iter == config_map.end()) {
+   *out = def_val;
+   return false;
+ }
+
+ *out = iter->second;
+ return true;
+}
+
+bool RGWFrontendConfig::get_val(const string& key, int def_val, int *out)
+{
+  string str;
+  bool found = get_val(key, "", &str);
+  if (!found) {
+    *out = def_val;
+    return false;
+  }
+  string err;
+  *out = strict_strtol(str.c_str(), 10, &err);
+  if (!err.empty()) {
+    cerr << "error parsing int: " << str << ": " << err << std::endl;
+    return -EINVAL;
+  }
+  return 0;
+}
 
 class RGWProcess {
   deque<RGWRequest *> m_req_queue;
 protected:
   RGWRados *store;
-//  OpsLogSocket *olog;
-  int *olog;
+  OpsLogSocket *olog;
   ThreadPool m_tp;
   Throttle req_throttle;
   RGWREST *rest;
@@ -177,7 +248,7 @@ protected:
     void _process(RGWRequest *req) {
 //      perfcounter->inc(l_rgw_qactive);
       process->handle_request(req);
-      process->req_throttle.put(1);
+//      process->req_throttle.put(1);
 //      perfcounter->inc(l_rgw_qactive, -1);
     }
     void _dump_queue() {
@@ -207,8 +278,8 @@ public:
       conf(_conf),
       sock_fd(-1),
       req_wq(this, 0/*  g_conf->rgw_op_thread_timeout*/,
-	     /*g_conf->rgw_op_thread_suicide_timeout*/0, &m_tp) {}
-  virtual ~RGWProcess() {}
+	     /*g_conf->rgw_op_thread_suicide_timeout*/0, &m_tp) {};
+  virtual ~RGWProcess() {};
   virtual void run() = 0;
   virtual void handle_request(RGWRequest *req) = 0;
 
@@ -279,29 +350,147 @@ public:
   }
 };
 
+struct RGWFCGXRequest : public RGWRequest {
+  FCGX_Request *fcgx;
+  QueueRing<FCGX_Request *> *qr;
+
+  RGWFCGXRequest(uint64_t req_id, QueueRing<FCGX_Request *> *_qr) : RGWRequest(req_id), qr(_qr) {
+    qr->dequeue(&fcgx);
+  }
+
+  ~RGWFCGXRequest() {
+    FCGX_Finish_r(fcgx);
+    qr->enqueue(fcgx);
+  }
+};
+
+class RGWFCGXProcess : public RGWProcess {
+  int max_connections;
+public:
+
+  RGWFCGXProcess(CephContext *cct, RGWProcessEnv *pe, int num_threads, RGWFrontendConfig *_conf) :
+    RGWProcess(cct, pe, num_threads, _conf),
+    max_connections(num_threads + (num_threads >> 3)){} /* have a bit more connections than threads so that requests
+                                                     are still accepted even if we're still processing older requests */   
+  void run();
+  void handle_request(RGWRequest *req);
+};
+void RGWFCGXProcess::run()
+{
+  string socket_path;
+  string socket_port;
+  string socket_host;
+
+  conf->get_val("socket_path", "/rgw.socket", &socket_path);
+  conf->get_val("socket_port", "9000"/*g_conf->rgw_port*/, &socket_port);
+  conf->get_val("socket_host", "127.0.0.1"/*g_conf->rgw_host*/, &socket_host);
+
+  if (socket_path.empty() && socket_port.empty() && socket_host.empty()) {
+    socket_path = "/rgw_socket_path";//g_conf->rgw_socket_path;
+    if (socket_path.empty()) {
+      dout(0) << "ERROR: no socket server point defined, cannot start fcgi frontend" << dendl;
+      return;
+    }
+  }
+
+  if (!socket_path.empty()) {
+    string path_str = socket_path;
+
+    /* this is necessary, as FCGX_OpenSocket might not return an error, but rather ungracefully exit */
+    int fd = open(path_str.c_str(), O_CREAT, 0644);
+    if (fd < 0) {
+      int err = errno;
+      /* ENXIO is actually expected, we'll get that if we try to open a unix domain socket */
+      if (err != ENXIO) {
+        dout(0) << "ERROR: cannot create socket: path=" << path_str << " error=" << "cpp_strerror"/*cpp_strerror(err)*/ << dendl;
+        return;
+      }
+    } else {
+      close(fd);
+    }
+
+    const char *path = path_str.c_str();
+    sock_fd = FCGX_OpenSocket(path, SOCKET_BACKLOG);
+    if (sock_fd < 0) {
+      dout(0) << "ERROR: FCGX_OpenSocket (" << path << ") returned " << sock_fd << dendl;
+      return;
+    }
+    if (chmod(path, 0777) < 0) {
+      dout(0) << "WARNING: couldn't set permissions on unix domain socket" << dendl;
+    }
+  } else if (!socket_port.empty()) {
+    string bind = socket_host + ":" + socket_port;
+    sock_fd = FCGX_OpenSocket(bind.c_str(), SOCKET_BACKLOG);
+    if (sock_fd < 0) {
+      dout(0) << "ERROR: FCGX_OpenSocket (" << bind.c_str() << ") returned " << sock_fd << dendl;
+      return;
+    }
+  }
+
+  m_tp.start();
+
+  FCGX_Request fcgx_reqs[max_connections];
+
+  QueueRing<FCGX_Request *> qr(max_connections);
+  for (int i = 0; i < max_connections; i++) {
+    FCGX_Request *fcgx = &fcgx_reqs[i];
+    FCGX_InitRequest(fcgx, sock_fd, 0);
+    qr.enqueue(fcgx);
+  }
+
+  for (;;) {
+    RGWFCGXRequest *req = new RGWFCGXRequest(100/*store->get_new_req_id()*/, &qr);
+    dout(10) << "allocated request req=" << hex << req << dec << dendl;
+    //req_throttle.get(1);
+    int ret = FCGX_Accept_r(req->fcgx);
+    if (ret < 0) {
+      delete req;
+      dout(0) << "ERROR: FCGX_Accept_r returned " << ret << dendl;
+      //req_throttle.put(1);
+      break;
+    }
+
+    req_wq.queue(req);
+  }
+
+  m_tp.drain(&req_wq);
+  m_tp.stop();
+
+  dout(20) << "cleaning up fcgx connections" << dendl;
+
+  for (int i = 0; i < max_connections; i++) {
+    FCGX_Finish_r(&fcgx_reqs[i]);
+  }
+}
+static int process_request(RGWRados *store, RGWREST *rest, RGWRequest *req, RGWClientIO *client_io, OpsLogSocket *olog);
+
+void RGWFCGXProcess::handle_request(RGWRequest *r)
+{
+  RGWFCGXRequest *req = static_cast<RGWFCGXRequest *>(r);
+  FCGX_Request *fcgx = req->fcgx;
+  RGWFCGX client_io(fcgx);
+
+ 
+  int ret = process_request(store, rest, req, &client_io, olog);
+  if (ret < 0) {
+    /* we don't really care about return code */
+    dout(20) << "process_request() returned " << ret << dendl;
+  }
+
+  FCGX_Finish_r(fcgx);
+
+  delete req;
+}
+
 class RGWFCGXFrontend : public RGWProcessFrontend {
 public:
   RGWFCGXFrontend(RGWProcessEnv& pe, RGWFrontendConfig *_conf) : RGWProcessFrontend(pe, _conf) {}
 
   int init() {
-//    pprocess = new RGWFCGXProcess(g_ceph_context, &env, g_conf->rgw_thread_pool_size, conf);
+    pprocess = new RGWFCGXProcess(g_ceph_context, &env, 256/*g_conf->rgw_thread_pool_size*/, conf);
     return 0;
   }
 };
-
-
-class RGWFCGXProcess : public RGWProcess {
-  int max_connections;
-public:
-  RGWFCGXProcess(CephContext *cct, RGWProcessEnv *pe, int num_threads, RGWFrontendConfig *_conf) :
-    RGWProcess(cct, pe, num_threads, _conf),
-    max_connections(num_threads + (num_threads >> 3)) /* have a bit more connections than threads so that requests
-                                                       are still accepted even if we're still processing older requests */
-    {}
-  void run();
-  void handle_request(RGWRequest *req);
-};
-
 
 void sighup_handler(int signum)
 {
@@ -327,6 +516,136 @@ static void handle_sigterm(int signum)
 
 }
 
+static RGWRESTMgr *set_logging(RGWRESTMgr *mgr)
+{
+      mgr->set_logging(true);
+        return mgr;
+}
+
+static int process_request(RGWRados *store, RGWREST *rest, RGWRequest *req, RGWClientIO *client_io, OpsLogSocket *olog)
+{
+  int ret = 0;
+
+  client_io->init(g_ceph_context);
+
+  req->log_init();
+
+  dout(1) << "====== starting new request req=" << hex << req << dec << " =====" << dendl;
+//  perfcounter->inc(l_rgw_req);
+
+  RGWEnv& rgw_env = client_io->get_env();
+
+  struct req_state rstate(g_ceph_context, &rgw_env);
+
+  struct req_state *s = &rstate;
+
+  //RGWObjectCtx rados_ctx(store, s);
+  //s->obj_ctx = &rados_ctx;
+
+  //s->req_id = store->unique_id(req->id);
+  //s->trans_id = store->unique_trans_id(req->id);
+
+  req->log_format(s, "initializing for trans_id = %s", s->trans_id.c_str());
+
+  RGWOp *op = NULL;
+  int init_error = 0;
+  bool should_log = false;
+  RGWRESTMgr *mgr;
+  RGWHandler *handler = rest->get_handler(store, s, client_io, &mgr, &init_error);
+  if (init_error != 0) {
+//    abort_early(s, NULL, init_error);
+    goto done;
+  }
+
+  should_log = mgr->get_logging();
+
+  req->log(s, "getting op");
+  op = handler->get_op(store);
+  if (!op) {
+//    abort_early(s, NULL, -ERR_METHOD_NOT_ALLOWED);
+    goto done;
+  }
+  req->op = op;
+
+  req->log(s, "authorizing");
+  ret = handler->authorize();
+  if (ret < 0) {
+    dout(10) << "failed to authorize request" << dendl;
+  //  abort_early(s, op, ret);
+    goto done;
+  }
+#if 0
+  if (s->user.suspended) {
+    dout(10) << "user is suspended, uid=" << s->user.user_id << dendl;
+    //abort_early(s, op, -ERR_USER_SUSPENDED);
+    goto done;
+  }
+#endif
+  req->log(s, "reading permissions");
+  ret = handler->read_permissions(op);
+  if (ret < 0) {
+    //abort_early(s, op, ret);
+    goto done;
+  }
+
+  req->log(s, "init op");
+  ret = op->init_processing();
+  if (ret < 0) {
+    //abort_early(s, op, ret);
+    goto done;
+  }
+
+  req->log(s, "verifying op mask");
+  ret = op->verify_op_mask();
+  if (ret < 0) {
+    //abort_early(s, op, ret);
+    goto done;
+  }
+
+  req->log(s, "verifying op permissions");
+  ret = op->verify_permission();
+  if (ret < 0) {
+    if (s->system_request) {
+      dout(2) << "overriding permissions due to system operation" << dendl;
+    } else {
+      //abort_early(s, op, ret);
+      goto done;
+    }
+  }
+
+  req->log(s, "verifying op params");
+  ret = op->verify_params();
+  if (ret < 0) {
+    //abort_early(s, op, ret);
+    goto done;
+  }
+
+  req->log(s, "executing");
+  op->pre_exec();
+  op->execute();
+  op->complete();
+done:
+  int r = client_io->complete_request();
+  if (r < 0) {
+    dout(0) << "ERROR: client_io->complete_request() returned " << r << dendl;
+  }
+  if (should_log) {
+    ;//rgw_log_op(store, s, (op ? op->name() : "unknown"), olog);
+  }
+
+  int http_ret = s->err.http_ret;
+
+  req->log_format(s, "http status=%d", http_ret);
+
+  if (handler)
+    handler->put_op(op);
+  rest->put_handler(handler);
+
+  dout(1) << "====== req done req=" << hex << req << dec << " http_status=" << http_ret << " ======" << dendl;
+
+  return (ret < 0 ? ret : s->err.ret);
+}
+
 /* 
  * ===  FUNCTION  ======================================================================
  *         Name:  main
@@ -343,16 +662,36 @@ int main ( int argc, char *argv[] )
     int r = 0;
     RGWRados *store ;    
     RGWREST rest;
-//    rest.register_default_mgr(set_logging(new RGWRESTMgr_S3));
-//    register_async_signal_handler(SIGHUP, sighup_handler);
-//    register_async_signal_handler(SIGTERM, handle_sigterm);
-//    register_async_signal_handler(SIGINT, handle_sigterm);
+    rest.register_default_mgr(set_logging(new RGWRESTMgr_S3));
+    //admin
+    RGWRESTMgr_Admin *admin_resource = new RGWRESTMgr_Admin;
+//    admin_resource->register_resource("usage", new RGWRESTMgr_Usage);
+//    admin_resource->register_resource("user", new RGWRESTMgr_User);
+    admin_resource->register_resource("bucket", new RGWRESTMgr_Bucket);    
+    /*Registering resource for /admin/metadata*/
+#if 0
+    admin_resource->register_resource("metadata", new RGWRESTMgr_Metadata);
+    admin_resource->register_resource("log", new RGWRESTMgr_Log);
+    admin_resource->register_resource("opstate", new RGWRESTMgr_Opstate);
+    admin_resource->register_resource("replica_log", new RGWRESTMgr_ReplicaLog);
+    admin_resource->register_resource("config", new RGWRESTMgr_Config);
+    rest.register_resource(g_conf->rgw_admin_entry, admin_resource);
+#endif
+    //    rest.register_default_mgr(set_logging(new RGWRESTMgr_S3));
+    //    register_async_signal_handler(SIGHUP, sighup_handler);
+    //    register_async_signal_handler(SIGTERM, handle_sigterm);
+    //    register_async_signal_handler(SIGINT, handle_sigterm);
 //    register_async_signal_handler(SIGUSR1, handle_sigterm);
 
-    RGWFrontendConfig *config;
+    RGWFrontendConfig *config = new RGWFrontendConfig("test null");
     RGWFrontend *fe;    
     RGWProcessEnv fcgi_pe = { store, &rest, 0/*olog*/, 0 };
 
+    r = config->init();
+    if (r < 0) {
+      cerr << "ERROR: failed to init config: " << "f" << std::endl;
+      return EINVAL;
+    }
     fe = new RGWFCGXFrontend(fcgi_pe, config);
     r = fe->init();
     if (r < 0) {
@@ -360,6 +699,8 @@ int main ( int argc, char *argv[] )
       return -r;
     }
     fe->run();
+    do{}
+    while (true);
 
     return EXIT_SUCCESS;
 }

@@ -21,7 +21,7 @@
 #include "byteorder.h"
 #include "buffer.h"
 #include "assert.h"
-
+//#include <assert.h>
 using namespace ceph;
 
 /*

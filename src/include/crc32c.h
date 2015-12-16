@@ -26,7 +26,7 @@ extern ceph_crc32c_func_t ceph_choose_crc32(void);
  */
 static inline uint32_t ceph_crc32c(uint32_t crc, unsigned char const *data, unsigned length)
 {
-	return ceph_crc32c_func(crc, data, length);
+	return 0;//ceph_crc32c_func(crc, data, length);
 }
 
 #endif

@@ -27,8 +27,9 @@
 #include "common/debug.h"
 #include "include/utime.h"
 #include "include/types.h"
-#include "rgw_client_io.h"
+//#include "rgw_client_io.h"
 #include "include/porting.h"
+#include "rgw_string.h"
 
 using namespace std;
 
@@ -157,6 +158,55 @@ enum http_op {
   OP_OPTIONS,
   OP_UNKNOWN,
 };
+class RGWConf;
+class RGWEnv {
+  std::map<string, string, ltstr_nocase> env_map;
+public:
+  RGWConf *conf; 
+
+  RGWEnv();
+  ~RGWEnv();
+  void init(CephContext *cct);
+  void init(CephContext *cct, char **envp);
+  void set(const char *name, const char *val);
+  const char *get(const char *name, const char *def_val = NULL);
+  int get_int(const char *name, int def_val = 0);
+  bool get_bool(const char *name, bool def_val = 0);
+  size_t get_size(const char *name, size_t def_val = 0);
+  bool exists(const char *name);
+  bool exists_prefix(const char *prefix);
+
+  void remove(const char *name);
+
+  std::map<string, string, ltstr_nocase>& get_map() { return env_map; }
+};
+
+class RGWConf {
+  friend class RGWEnv;
+protected:
+  void init(CephContext *cct, RGWEnv * env);
+public:
+  RGWConf() :
+    enable_ops_log(1), enable_usage_log(1), defer_to_bucket_acls(0) {}
+
+  int enable_ops_log;
+  int enable_usage_log;
+  uint8_t defer_to_bucket_acls;
+};
+/* Helper class used for RGWHTTPArgs parsing */
+class NameVal
+{
+   string str;
+   string name;
+   string val;
+ public:
+    NameVal(string nv) : str(nv) {}
+
+    int parse();
+
+    string& get_name() { return name; }
+    string& get_val() { return val; }
+};
 /** Stores the XML arguments associated with the HTTP request in req_state*/
 class RGWHTTPArgs
 {
@@ -226,7 +276,7 @@ struct rgw_err {
     std::string message;
 };
 struct req_info {
-//    RGWEnv *env;
+    RGWEnv *env;
     RGWHTTPArgs args;
     map<string, string> x_meta_map;
 
@@ -242,7 +292,85 @@ struct req_info {
     void rebuild_from(req_info& src);
     void init_meta_info(bool *found_bad_meta);
 };
+struct rgw_obj_key {
+  string name;
+  string instance;
+
+  rgw_obj_key() {}
+  rgw_obj_key(const string& n) {
+    set(n);
+  }
+  rgw_obj_key(const string& n, const string& i) {
+    set(n, i);
+  }
+
+//  rgw_obj_key(const cls_rgw_obj_key& k) {
+//    set(k);
+//  }
+
+  void set(/*  const cls_rgw_obj_key& k*/) {
+//    name = k.name;
+//    instance = k.instance;
+  }
+
+  void transform(/*cls_rgw_obj_key *k*/) {
+//    k->name = name;
+//    k->instance = instance;
+  }
+
+  void set(const string& n) {
+    name = n;
+    instance.clear();
+  }
+
+  void set(const string& n, const string& i) {
+    name = n;
+    instance = i;
+  }
+
+  bool empty() {
+    return name.empty();
+  }
+  bool operator==(const rgw_obj_key& k) const {
+    return (name.compare(k.name) == 0) &&
+           (instance.compare(k.instance) == 0);
+  }
+  bool operator<(const rgw_obj_key& k) const {
+    int r = name.compare(k.name);
+    if (r == 0) {
+      r = instance.compare(k.instance);
+    }
+    return (r < 0);
+  }
+  bool operator<=(const rgw_obj_key& k) const {
+    return !(k < *this);
+  }
+  void encode(bufferlist& bl) const {
+    ENCODE_START(1, 1, bl);
+    ::encode(name, bl);
+    ::encode(instance, bl);
+    ENCODE_FINISH(bl);
+  }
+  void decode(bufferlist::iterator& bl) {
+    DECODE_START(1, bl);
+    ::decode(name, bl);
+    ::decode(instance, bl);
+    DECODE_FINISH(bl);
+  }
+  void dump(Formatter *f) const;
+};
+WRITE_CLASS_ENCODER(rgw_obj_key)
+
+inline ostream& operator<<(ostream& out, const rgw_obj_key &o) {
+  if (o.instance.empty()) {
+    return out << o.name;
+  } else {
+    return out << o.name << "[" << o.instance << "]";
+  }
+}
+
 /* * Store all the state necessary to complete and respond to an HTTP request*/
+class RGWClientIO;
 struct req_state {
     CephContext *cct;
     RGWClientIO *cio;
@@ -267,7 +395,7 @@ struct req_state {
 
 //    rgw_bucket bucket;
     string bucket_name_str;
-//    rgw_obj_key object;
+    rgw_obj_key object;
     string src_bucket_name;
 //    rgw_obj_key src_object;
 //    ACLOwner bucket_owner;
@@ -315,5 +443,22 @@ struct req_state {
     req_state(CephContext *_cct, class RGWEnv *e);
     ~req_state();
 };
+static inline int rgw_str_to_bool(const char *s, int def_val)
+{
+  if (!s)
+    return def_val;
+
+  return (strcasecmp(s, "on") == 0 ||
+          strcasecmp(s, "yes") == 0 ||
+          strcasecmp(s, "1") == 0);
+}
+/** Convert an input URL into a sane object name
+ * by converting %-escaped strings into characters, etc*/
+extern bool url_decode(string& src_str, string& dest_str, bool in_query = false);
+extern void url_encode(const string& src, string& dst);
+extern int parse_key_value(string& in_str, string& key, string& val);
+extern int parse_key_value(string& in_str, const char *delim, string& key, string& val);
+/** time parsing */
+extern int parse_time(const char *time_str, time_t *time);
 
 #endif

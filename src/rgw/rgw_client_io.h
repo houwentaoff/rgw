@@ -10,7 +10,7 @@
 
 //#include "rgw_common.h"
 #include "include/porting.h"
-
+#include "porting_common.h"
 class RGWClientIO {
   bool account;
 

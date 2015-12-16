@@ -113,4 +113,70 @@ int RGWOp::read_bucket_cors()
 #endif
   return 0;
 }
+RGWHandler::~RGWHandler()
+{
+}
+
+int RGWHandler::init(RGWRados *_store, struct req_state *_s, RGWClientIO *cio)
+{
+  store = _store;
+  s = _s;
+
+  return 0;
+}
+
+int RGWHandler::do_read_permissions(RGWOp *op, bool only_bucket)
+{
+  int ret = 0;// rgw_build_policies(store, s, only_bucket, op->prefetch_data());
+#if 0
+  if (ret < 0) {
+    ldout(s->cct, 10) << "read_permissions on " << s->bucket << ":" <<s->object << " only_bucket=" << only_bucket << " ret=" << ret << dendl;
+    if (ret == -ENODATA)
+      ret = -EACCES;
+  }
+#endif
+  return ret;
+}
+
+
+RGWOp *RGWHandler::get_op(RGWRados *store)
+{
+  RGWOp *op;
+  switch (s->op) {
+   case OP_GET:
+     op = op_get();
+     break;
+   case OP_PUT:
+     op = op_put();
+     break;
+   case OP_DELETE:
+     op = op_delete();
+     break;
+   case OP_HEAD:
+     op = op_head();
+     break;
+   case OP_POST:
+     op = op_post();
+     break;
+   case OP_COPY:
+     op = op_copy();
+     break;
+   case OP_OPTIONS:
+     op = op_options();
+     break;
+   default:
+     return NULL;
+  }
+
+  if (op) {
+    op->init(store, s, this);
+  }
+  return op;
+}
+
+void RGWHandler::put_op(RGWOp *op)
+{
+  delete op;
+}
+
 
