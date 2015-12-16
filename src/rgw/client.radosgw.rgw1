@@ -1,0 +1,7 @@
+[client.radosgw.rgw1]
+host = xx.xx.xx.xx
+log file = /var/log/radosgw/client.radosgw.rgw1.log
+keyring = /etc/ceph/ceph.client.radosgw.rgw1.keyring
+rgw_frontends =civetweb port=xxxx
+rgw print continue = false
+rgw_thread_pool_size = 200
