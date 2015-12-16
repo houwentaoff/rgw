@@ -21,7 +21,7 @@ INCLUDES 	 = -I../
 
 include ../lib.rules
 
-LOCAL_LIBS 	 = ../common/libcommon.a ../json_spirit/libjson_spirit.a \
+LOCAL_LIBS 	 = ../include/libinclude.a ../common/libcommon.a ../json_spirit/libjson_spirit.a \
 			   ../cls/libcls.a #../global/libglobal.a ../include/libinclude.a \
 			    ../auth/libauth.a    \
 			   ../log/liblog.a ../msg/libmsg.a 

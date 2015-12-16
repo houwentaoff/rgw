@@ -25,8 +25,15 @@ namespace ceph {
 }
 class CephContext
 {
-    CephContext(){};
-    ~CephContext(){};
+    public:
+        CephContext(){};
+        CephContext(uint32_t module_type_, int init_flags_ = 0);
+        
+        ~CephContext(){};
+//        ceph::log::Log *_log;
+        CephContext(const CephContext &rhs);        
+        CephContext &operator=(const CephContext &rhs);        
+        
 };
 class PerfCounters
 {

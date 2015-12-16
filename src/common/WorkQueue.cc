@@ -146,9 +146,9 @@ void ThreadPool::worker(WorkThread *wt)
 //      hb,
 //      cct->_conf->threadpool_default_timeout,
 //      0);
-//    _cond.WaitInterval(cct, _lock,
-//      utime_t(
-//	cct->_conf->threadpool_empty_queue_max_wait, 0));
+    _cond.WaitInterval(cct, _lock,
+      utime_t(
+	2/*cct->_conf->threadpool_empty_queue_max_wait*/, 0));
   }
   ldout(cct,1) << "worker finish" << dendl;
 
