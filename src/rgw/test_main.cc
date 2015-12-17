@@ -381,7 +381,7 @@ void RGWFCGXProcess::run()
   string socket_port;
   string socket_host;
 
-  conf->get_val("socket_path", "/rgw.socket", &socket_path);
+  conf->get_val("socket_path", "/rgw.sock", &socket_path);
   conf->get_val("socket_port", "9000"/*g_conf->rgw_port*/, &socket_port);
   conf->get_val("socket_host", "127.0.0.1"/*g_conf->rgw_host*/, &socket_host);
 

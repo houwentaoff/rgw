@@ -140,8 +140,9 @@ void ThreadPool::worker(WorkThread *wt)
       if (did)
 	continue;
     }
-
-    ldout(cct,20) << "worker waiting" << dendl;
+ /* :TODO:2015/12/17 17:00:58:hwt:  网络调试暂且关闭*/
+//    ldout(cct,20) << "worker waiting" << dendl;
+ /* :TODO:End---  */
 //    cct->get_heartbeat_map()->reset_timeout(
 //      hb,
 //      cct->_conf->threadpool_default_timeout,
