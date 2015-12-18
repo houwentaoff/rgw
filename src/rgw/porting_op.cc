@@ -179,4 +179,84 @@ void RGWHandler::put_op(RGWOp *op)
   delete op;
 }
 
+int RGWListBuckets::verify_permission()
+{
+  return 0;
+}
+
+void RGWListBuckets::execute()
+{
+  bool done;
+  bool started = false;
+  uint64_t total_count = 0;
+
+  uint64_t max_buckets = s->cct->_conf->rgw_list_buckets_max_chunk;
+
+  ret = get_params();
+  if (ret < 0) {
+    goto send_end;
+  }
+
+  if (supports_account_metadata()) {
+    ret = rgw_get_user_attrs_by_uid(store, s->user.user_id, attrs);
+    if (ret < 0) {
+      goto send_end;
+    }
+  }
+
+  do {
+    RGWUserBuckets buckets;
+    uint64_t read_count;
+    if (limit >= 0) {
+      read_count = min(limit - total_count, (uint64_t)max_buckets);
+    } else {
+      read_count = max_buckets;
+    }
+
+    ret = rgw_read_user_buckets(store, s->user.user_id, buckets,
+                                marker, read_count, should_get_stats(), 0);
+
+    if (ret < 0) {
+      /* hmm.. something wrong here.. the user was authenticated, so it
+         should exist */
+      ldout(s->cct, 10) << "WARNING: failed on rgw_get_user_buckets uid=" << s->user.user_id << dendl;
+      break;
+    }
+    map<string, RGWBucketEnt>& m = buckets.get_buckets();
+    map<string, RGWBucketEnt>::iterator iter;
+    for (iter = m.begin(); iter != m.end(); ++iter) {
+      RGWBucketEnt& bucket = iter->second;
+      buckets_size += bucket.size;
+      buckets_size_rounded += bucket.size_rounded;
+      buckets_objcount += bucket.count;
+
+      marker = iter->first;
+    }
+    buckets_count += m.size();
+    total_count += m.size();
+
+    done = (m.size() < read_count || (limit >= 0 && total_count >= (uint64_t)limit));
+
+    if (!started) {
+      send_response_begin(buckets.count() > 0);
+      started = true;
+    }
+
+    if (!m.empty()) {
+      send_response_data(buckets);
+
+      map<string, RGWBucketEnt>::reverse_iterator riter = m.rbegin();
+      marker = riter->first;
+    }
+  } while (!done);
+
+send_end:
+  if (!started) {
+    send_response_begin(false);
+  }
+  send_response_end();
+}
+
+
+
 

@@ -136,4 +136,45 @@ public:
   virtual int read_permissions(RGWOp *op) = 0;
   virtual int authorize() = 0;
 };
+#define RGW_LIST_BUCKETS_LIMIT_MAX 10000
+
+class RGWListBuckets : public RGWOp {
+protected:
+  int ret;
+  bool sent_data;
+  string marker;
+  int64_t limit;
+  uint64_t limit_max;
+  uint32_t buckets_count;
+  uint64_t buckets_objcount;
+  uint64_t buckets_size;
+  uint64_t buckets_size_rounded;
+  map<string, bufferlist> attrs;
+
+public:
+  RGWListBuckets() : ret(0), sent_data(false) {
+    limit = limit_max = RGW_LIST_BUCKETS_LIMIT_MAX;
+    buckets_count = 0;
+    buckets_objcount = 0;
+    buckets_size = 0;
+    buckets_size_rounded = 0;
+  }
+
+  int verify_permission();
+  void execute();
+
+  virtual int get_params() = 0;
+  virtual void send_response_begin(bool has_buckets) = 0;
+  virtual void send_response_data(RGWUserBuckets& buckets) = 0;
+  virtual void send_response_end() = 0;
+  virtual void send_response() {}
+
+  virtual bool should_get_stats() { return false; }
+  virtual bool supports_account_metadata() { return false; }
+
+  virtual const string name() { return "list_buckets"; }
+  virtual RGWOpType get_type() { return RGW_OP_LIST_BUCKETS; }
+  virtual uint32_t op_mask() { return RGW_OP_TYPE_READ; }
+};
+
 #endif

@@ -675,8 +675,8 @@ int main ( int argc, char *argv[] )
     admin_resource->register_resource("opstate", new RGWRESTMgr_Opstate);
     admin_resource->register_resource("replica_log", new RGWRESTMgr_ReplicaLog);
     admin_resource->register_resource("config", new RGWRESTMgr_Config);
-    rest.register_resource(g_conf->rgw_admin_entry, admin_resource);
 #endif
+    rest.register_resource("admin"/*g_conf->rgw_admin_entry*/, admin_resource);
     //    rest.register_default_mgr(set_logging(new RGWRESTMgr_S3));
     //    register_async_signal_handler(SIGHUP, sighup_handler);
     //    register_async_signal_handler(SIGTERM, handle_sigterm);

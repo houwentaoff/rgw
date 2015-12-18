@@ -343,7 +343,7 @@ int RGWREST::preprocess(struct req_state *s, RGWClientIO *cio)
   }
 
   if (s->info.domain.empty()) {
-    s->info.domain = "test domain";//s->cct->_conf->rgw_dns_name;
+    s->info.domain = "bwcpn";//s->cct->_conf->rgw_dns_name;
   }
 
   url_decode(s->info.request_uri, s->decoded_uri);

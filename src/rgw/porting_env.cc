@@ -136,9 +136,9 @@ void RGWConf::init(CephContext *cct, RGWEnv *env)
 
   defer_to_bucket_acls = 0;  // default
 //  if (cct->_conf->rgw_defer_to_bucket_acls == "recurse") {
-    defer_to_bucket_acls = RGW_DEFER_TO_BUCKET_ACLS_RECURSE;
+//    defer_to_bucket_acls = RGW_DEFER_TO_BUCKET_ACLS_RECURSE;
 //  } else if (cct->_conf->rgw_defer_to_bucket_acls == "full_control") {
-//    defer_to_bucket_acls = RGW_DEFER_TO_BUCKET_ACLS_FULL_CONTROL;
+    defer_to_bucket_acls = RGW_DEFER_TO_BUCKET_ACLS_FULL_CONTROL;
 //  }
 }
 

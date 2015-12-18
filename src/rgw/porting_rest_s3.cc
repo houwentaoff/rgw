@@ -191,7 +191,7 @@ RGWHandler *RGWRESTMgr_S3::get_handler(struct req_state *s)
 }
 RGWOp *RGWHandler_ObjStore_Service_S3::op_get()
 {
-  return NULL;//new RGWListBuckets_ObjStore_S3;
+  return new RGWListBuckets_ObjStore_S3;
 }
 
 RGWOp *RGWHandler_ObjStore_Service_S3::op_head()
