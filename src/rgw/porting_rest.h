@@ -88,6 +88,18 @@ class RGWHandler_ObjStore : public RGWHandler {
 
         virtual int authorize() = 0;
 };
+class RGWListBuckets_ObjStore : public RGWListBuckets {
+public:
+  RGWListBuckets_ObjStore() {}
+  ~RGWListBuckets_ObjStore() {}
+};
+
+class RGWListBucket_ObjStore : public RGWListBucket {
+public:
+  RGWListBucket_ObjStore() {}
+  ~RGWListBucket_ObjStore() {}
+};
+
 
 
 #endif

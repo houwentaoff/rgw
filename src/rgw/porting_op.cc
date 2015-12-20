@@ -190,7 +190,7 @@ void RGWListBuckets::execute()
   bool started = false;
   uint64_t total_count = 0;
 
-  uint64_t max_buckets = s->cct->_conf->rgw_list_buckets_max_chunk;
+  uint64_t max_buckets = 0;//s->cct->_conf->rgw_list_buckets_max_chunk;
 
   ret = get_params();
   if (ret < 0) {
@@ -198,7 +198,7 @@ void RGWListBuckets::execute()
   }
 
   if (supports_account_metadata()) {
-    ret = rgw_get_user_attrs_by_uid(store, s->user.user_id, attrs);
+//    ret = rgw_get_user_attrs_by_uid(store, s->user.user_id, attrs);
     if (ret < 0) {
       goto send_end;
     }
@@ -213,13 +213,13 @@ void RGWListBuckets::execute()
       read_count = max_buckets;
     }
 
-    ret = rgw_read_user_buckets(store, s->user.user_id, buckets,
-                                marker, read_count, should_get_stats(), 0);
+//    ret = rgw_read_user_buckets(store, s->user.user_id, buckets,
+//                                marker, read_count, should_get_stats(), 0);
 
     if (ret < 0) {
       /* hmm.. something wrong here.. the user was authenticated, so it
          should exist */
-      ldout(s->cct, 10) << "WARNING: failed on rgw_get_user_buckets uid=" << s->user.user_id << dendl;
+//      ldout(s->cct, 10) << "WARNING: failed on rgw_get_user_buckets uid=" << s->user.user_id << dendl;
       break;
     }
     map<string, RGWBucketEnt>& m = buckets.get_buckets();
@@ -256,6 +256,60 @@ send_end:
   }
   send_response_end();
 }
+void RGWListBucket::pre_exec()
+{
+//  rgw_bucket_object_pre_exec(s);
+}
+int RGWListBucket::parse_max_keys()
+{
+  if (!max_keys.empty()) {
+    char *endptr;
+    max = strtol(max_keys.c_str(), &endptr, 10);
+    if (endptr) {
+      while (*endptr && isspace(*endptr)) // ignore white space
+        endptr++;
+      if (*endptr) {
+        return -EINVAL;
+      }
+    }
+  } else {
+    max = default_max;
+  }
+
+  return 0;
+}
+void RGWListBucket::execute()
+{
+  ret = get_params();
+  if (ret < 0)
+    return;
+
+  if (need_container_stats()) {
+    map<string, RGWBucketEnt> m;
+//    m[s->bucket.name] = RGWBucketEnt();
+//    m.begin()->second.bucket = s->bucket;
+//    ret = store->update_containers_stats(m);
+    if (ret > 0) {
+      bucket = m.begin()->second;
+    }
+  }
+
+//  RGWRados::Bucket target(store, s->bucket);
+//  RGWRados::Bucket::List list_op(&target);
+#if 0
+  list_op.params.prefix = prefix;
+  list_op.params.delim = delimiter;
+  list_op.params.marker = marker;
+  list_op.params.end_marker = end_marker;
+  list_op.params.list_versions = list_versions;
+
+  ret = list_op.list_objects(max, &objs, &common_prefixes, &is_truncated);
+  if (ret >= 0 && !delimiter.empty()) {
+    next_marker = list_op.get_next_marker();
+  }
+#endif
+}
+
 
 
 

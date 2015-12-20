@@ -59,7 +59,7 @@ ECHO=echo
 
 DESTDIR=
 #debug 
-V=0
+V=1
 
 Q=@
 E=echo

@@ -126,6 +126,19 @@ public:
   RGWHandler_ObjStore_Obj_S3() {}
   virtual ~RGWHandler_ObjStore_Obj_S3() {}
 };
+class RGWListBuckets_ObjStore_S3 : public RGWListBuckets_ObjStore {
+public:
+  RGWListBuckets_ObjStore_S3() {}
+  ~RGWListBuckets_ObjStore_S3() {}
+
+  int get_params() {
+    limit = -1; /* no limit */
+    return 0;
+  }
+  virtual void send_response_begin(bool has_buckets){};
+  virtual void send_response_data(RGWUserBuckets& buckets){};
+  virtual void send_response_end(){};
+};
 
 #endif
 

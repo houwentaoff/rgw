@@ -22,6 +22,7 @@
 #include "include/porting.h"
 #include "porting_common.h"
 #include "rgw_client_io.h"
+#include "porting_bucket.h"
 
 struct req_state;
 class RGWHandler;
@@ -74,7 +75,7 @@ protected:
 //  RGWQuotaInfo bucket_quota;
 //  RGWQuotaInfo user_quota;
 
-  virtual int init_quota();
+  virtual int init_quota(){};
 public:
   RGWOp() : s(NULL), dialect_handler(NULL), store(NULL), cors_exist(false) {}
   virtual ~RGWOp() {}
@@ -175,6 +176,41 @@ public:
   virtual const string name() { return "list_buckets"; }
   virtual RGWOpType get_type() { return RGW_OP_LIST_BUCKETS; }
   virtual uint32_t op_mask() { return RGW_OP_TYPE_READ; }
+};
+class RGWListBucket : public RGWOp {
+protected:
+  RGWBucketEnt bucket;
+  string prefix;
+  rgw_obj_key marker; 
+  rgw_obj_key next_marker; 
+  rgw_obj_key end_marker;
+  string max_keys;
+  string delimiter;
+  string encoding_type;
+  bool list_versions;
+  int max;
+  int ret;
+  vector<RGWObjEnt> objs;
+  map<string, bool> common_prefixes;
+
+  int default_max;
+  bool is_truncated;
+
+  int parse_max_keys();
+
+public:
+  RGWListBucket() : list_versions(false), max(0), ret(0),
+                    default_max(0), is_truncated(false) {}
+  int verify_permission();
+  void pre_exec();
+  void execute();
+
+  virtual int get_params() = 0;
+  virtual void send_response() = 0;
+  virtual const string name() { return "list_bucket"; }
+  virtual RGWOpType get_type() { return RGW_OP_LIST_BUCKET; }
+  virtual uint32_t op_mask() { return RGW_OP_TYPE_READ; }
+  virtual bool need_container_stats() { return false; }
 };
 
 #endif

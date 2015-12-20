@@ -53,10 +53,10 @@ class heartbeat_handle_d
 {
     
 };
-class RGWAccessControlPolicy
-{
-
-};
+//class RGWAccessControlPolicy
+//{
+//
+//};
 struct cls_user_bucket
 {
     std::string name;

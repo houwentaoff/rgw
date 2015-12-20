@@ -26,7 +26,7 @@ LOCAL_LIBS 	 = ../include/libinclude.a ../common/libcommon.a ../json_spirit/libj
 			    ../auth/libauth.a    \
 			   ../log/liblog.a ../msg/libmsg.a 
 
-LD = $(SYS_LIBS) -pthread -lfcgi -lcurl
+LD = $(SYS_LIBS) -pthread -lfcgi -lcurl -lexpat
 
 RGW_SERVER  := rgw
 TEST_RGW 	:= test_main
@@ -37,9 +37,10 @@ all:$(RGW_SERVER)
 
 RGW_OBJS  	  =  rgw_env.o rgw_fcgi.o rgw_client_io.o rgw_common.o \
 			     rgw_op.o rgw_rest.o  rgw_rest_s3.o rgw_main.o 
-TEST_OBJS 	  =  test_main.o porting_env.o rgw_client_io.o rgw_fcgi.o \
-                 porting_rest.o porting_rest_bucket.o\
-				 porting_rest_s3.o porting_op.o porting_common.o
+TEST_OBJS 	  = porting_bucket.o porting_acl_s3.o porting_xml.o porting_acl.o \
+				test_main.o porting_env.o rgw_client_io.o rgw_fcgi.o \
+                porting_rest.o porting_rest_bucket.o\
+				porting_rest_s3.o porting_op.o porting_common.o
 				  #rgw_common.o #rgw_op.o
 
 $(RGW_SERVER): $(RGW_OBJS) $(LOCAL_LIBS)
