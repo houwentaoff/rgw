@@ -1165,7 +1165,7 @@ struct RGWBucketEnt {
     size_rounded = s;
     DECODE_FINISH(bl);
   }
-  void dump(Formatter *f) const{};
+  void dump(Formatter *f) const;
   static void generate_test_instances(list<RGWBucketEnt*>& o){};
 };
 WRITE_CLASS_ENCODER(RGWBucketEnt)

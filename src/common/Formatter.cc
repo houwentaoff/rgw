@@ -19,7 +19,7 @@
 #include "assert.h"
 //#include <assert.h>
 #include "Formatter.h"
-//#include "common/escape.h"
+#include "common/escape.h"
 
 #include <iostream>
 #include <sstream>
@@ -518,13 +518,10 @@ void XMLFormatter::print_spaces()
 
 std::string XMLFormatter::escape_xml_str(const char *str)
 {
-#if 0    
   int len = escape_xml_attr_len(str);
   std::vector<char> escaped(len, '\0');
   escape_xml_attr(str, &escaped[0]);
   return std::string(&escaped[0]);
-#endif
-return "";
 }
 
 TableFormatter::TableFormatter(bool keyval) : m_keyval(keyval)
