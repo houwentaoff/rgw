@@ -62,6 +62,8 @@
 
 #define SOCKET_BACKLOG 1024
 
+#define RGW_THREAD_POOL_SIZE   1
+
 CephContext *g_ceph_context = NULL;
 
 class RGWProcess;
@@ -487,7 +489,7 @@ public:
   RGWFCGXFrontend(RGWProcessEnv& pe, RGWFrontendConfig *_conf) : RGWProcessFrontend(pe, _conf) {}
 
   int init() {
-    pprocess = new RGWFCGXProcess(g_ceph_context, &env, 256/*g_conf->rgw_thread_pool_size*/, conf);
+    pprocess = new RGWFCGXProcess(g_ceph_context, &env, RGW_THREAD_POOL_SIZE/*g_conf->rgw_thread_pool_size*/, conf);
     return 0;
   }
 };

@@ -22,9 +22,13 @@
 #include "porting_op.h"
 #include "common/utf8.h"
 
+#define CORS_MAX_AGE_INVALID ((uint32_t)-1)
+#define TIME_BUF_SIZE 128
+
 /* avoid duplicate hostnames in hostnames list */
 static set<string> hostnames_set;
 static map<string, string> generic_attrs_map;
+map<int, const char *> http_status_names;
 
 int RGWHandler_ObjStore::read_permissions(RGWOp *op_obj)
 {
@@ -137,7 +141,7 @@ int RGWHandler_ObjStore::allocate_formatter(struct req_state *s, int default_typ
 //            s->formatter = new RGWFormatter_Plain;
             break;
         case RGW_FORMAT_XML:
-//            s->formatter = new XMLFormatter(false);
+              s->formatter = new XMLFormatter(false);
             break;
         case RGW_FORMAT_JSON:
 //            s->formatter = new JSONFormatter(false);
@@ -470,4 +474,221 @@ RGWHandler *RGWREST::get_handler(RGWRados *store, struct req_state *s, RGWClient
   return handler;
 }
 
+void set_req_state_err(struct req_state *s, int err_no)
+{
+#if 0
+  const struct rgw_http_errors *r;
 
+  if (err_no < 0)
+    err_no = -err_no;
+  s->err.ret = -err_no;
+  if (s->prot_flags & RGW_REST_SWIFT) {
+    r = search_err(err_no, RGW_HTTP_SWIFT_ERRORS, ARRAY_LEN(RGW_HTTP_SWIFT_ERRORS));
+    if (r) {
+      s->err.http_ret = r->http_ret;
+      s->err.s3_code = r->s3_code;
+      return;
+    }
+  }
+  r = search_err(err_no, RGW_HTTP_ERRORS, ARRAY_LEN(RGW_HTTP_ERRORS));
+  if (r) {
+    s->err.http_ret = r->http_ret;
+    s->err.s3_code = r->s3_code;
+    return;
+  }
+#endif
+  dout(0) << "WARNING: set_req_state_err err_no=" << err_no << " resorting to 500" << dendl;
+
+  s->err.http_ret = 500;
+  s->err.s3_code = "UnknownError";
+}
+static void dump_status(struct req_state *s, const char *status, const char *status_name)
+{
+  int r = s->cio->send_status(status, status_name);
+  if (r < 0) {
+    ldout(s->cct, 0) << "ERROR: s->cio->send_status() returned err=" << r << dendl;
+  }
+}
+
+void dump_errno(struct req_state *s)
+{
+  char buf[32];
+  snprintf(buf, sizeof(buf), "%d", s->err.http_ret);
+  dump_status(s, buf, http_status_names[s->err.http_ret]);
+}
+
+void dump_errno(struct req_state *s, int err)
+{
+  char buf[32];
+  snprintf(buf, sizeof(buf), "%d", err);
+  dump_status(s, buf, http_status_names[s->err.http_ret]);
+}
+
+void dump_start(struct req_state *s)
+{
+  if (!s->content_started) {
+    if (s->format == RGW_FORMAT_XML)
+      s->formatter->write_raw_data(XMLFormatter::XML_1_DTD);
+    s->content_started = true;
+  }
+}
+void dump_trans_id(req_state *s)
+{
+  if (s->prot_flags & RGW_REST_SWIFT) {
+    s->cio->print("X-Trans-Id: %s\r\n", s->trans_id.c_str());
+  }
+  else {
+    s->cio->print("x-amz-request-id: %s\r\n", s->trans_id.c_str());
+  }
+}
+
+void dump_access_control(struct req_state *s, const char *origin, const char *meth,
+                         const char *hdr, const char *exp_hdr, uint32_t max_age) {
+  if (origin && (origin[0] != '\0')) {
+    s->cio->print("Access-Control-Allow-Origin: %s\r\n", origin);
+    if (meth && (meth[0] != '\0'))
+      s->cio->print("Access-Control-Allow-Methods: %s\r\n", meth);
+    if (hdr && (hdr[0] != '\0'))
+      s->cio->print("Access-Control-Allow-Headers: %s\r\n", hdr);
+    if (exp_hdr && (exp_hdr[0] != '\0')) {
+      s->cio->print("Access-Control-Expose-Headers: %s\r\n", exp_hdr);
+    }
+    if (max_age != CORS_MAX_AGE_INVALID) {
+      s->cio->print("Access-Control-Max-Age: %d\r\n", max_age);
+    }
+  }
+}
+
+void dump_access_control(req_state *s, RGWOp *op)
+{
+  string origin;
+  string method;
+  string header;
+  string exp_header;
+  unsigned max_age = CORS_MAX_AGE_INVALID;
+
+  if (!op->generate_cors_headers(origin, method, header, exp_header, &max_age))
+    return;
+
+  dump_access_control(s, origin.c_str(), method.c_str(), header.c_str(), exp_header.c_str(), max_age);
+}
+
+void dump_content_length(struct req_state *s, uint64_t len)
+{
+  int r = s->cio->send_content_length(len);
+  if (r < 0) {
+    ldout(s->cct, 0) << "ERROR: s->cio->print() returned err=" << r << dendl;
+  }
+  r = s->cio->print("Accept-Ranges: %s\r\n", "bytes");
+  if (r < 0) {
+    ldout(s->cct, 0) << "ERROR: s->cio->print() returned err=" << r << dendl;
+  }
+}
+
+void rgw_flush_formatter_and_reset(struct req_state *s, Formatter *formatter)
+{
+  std::ostringstream oss;
+  formatter->flush(oss);
+  std::string outs(oss.str());
+  if (!outs.empty() && s->op != OP_HEAD) {
+    s->cio->write(outs.c_str(), outs.size());
+  }
+
+  s->formatter->reset();
+}
+
+void end_header(struct req_state *s, RGWOp *op, const char *content_type, const int64_t proposed_content_length,
+		bool force_content_type)
+{
+  string ctype;
+
+  dump_trans_id(s);
+
+  if ((!s->err.is_err()) &&
+      /*  (s->bucket_info.owner != s->user.user_id) &&*/
+      (s->bucket_info.requester_pays)) {
+    s->cio->print("x-amz-request-charged: requester\r\n");
+  }
+
+  if (op) {
+    dump_access_control(s, op);
+  }
+
+  if (s->prot_flags & RGW_REST_SWIFT && !content_type) {
+    force_content_type = true;
+  }
+
+  /* do not send content type if content length is zero
+     and the content type was not set by the user */
+  if (force_content_type || (!content_type &&  s->formatter->get_len()  != 0) || s->err.is_err()){
+    switch (s->format) {
+    case RGW_FORMAT_XML:
+      ctype = "application/xml";
+      break;
+    case RGW_FORMAT_JSON:
+      ctype = "application/json";
+      break;
+    default:
+      ctype = "text/plain";
+      break;
+    }
+    if (s->prot_flags & RGW_REST_SWIFT)
+      ctype.append("; charset=utf-8");
+    content_type = ctype.c_str();
+  }
+  if (s->err.is_err()) {
+    dump_start(s);
+    s->formatter->open_object_section("Error");
+    if (!s->err.s3_code.empty())
+      s->formatter->dump_string("Code", s->err.s3_code);
+    if (!s->err.message.empty())
+      s->formatter->dump_string("Message", s->err.message);
+    if (!s->trans_id.empty())
+      s->formatter->dump_string("RequestId", s->trans_id);
+    s->formatter->close_section();
+    dump_content_length(s, s->formatter->get_len());
+  } else {
+    if (proposed_content_length != NO_CONTENT_LENGTH) {
+      dump_content_length(s, proposed_content_length);
+    }
+  }
+
+  int r;
+  if (content_type) {
+      r = s->cio->print("Content-Type: %s\r\n", content_type);
+      if (r < 0) {
+	ldout(s->cct, 0) << "ERROR: s->cio->print() returned err=" << r << dendl;
+      }
+  }
+  r = s->cio->complete_header();
+  if (r < 0) {
+    ldout(s->cct, 0) << "ERROR: s->cio->complete_header() returned err=" << r << dendl;
+  }
+
+  s->cio->set_account(true);
+  rgw_flush_formatter_and_reset(s, s->formatter);
+}
+
+void dump_time(struct req_state *s, const char *name, time_t *t)
+{
+  char buf[TIME_BUF_SIZE];
+  struct tm result;
+  struct tm *tmp = gmtime_r(t, &result);
+  if (tmp == NULL)
+    return;
+
+  if (strftime(buf, sizeof(buf), "%Y-%m-%dT%T.000Z", tmp) == 0)
+    return;
+
+  s->formatter->dump_string(name, buf);
+}
+
+void rgw_flush_formatter(struct req_state *s, Formatter *formatter)
+{
+  std::ostringstream oss;
+  formatter->flush(oss);
+  std::string outs(oss.str());
+  if (!outs.empty() && s->op != OP_HEAD) {
+    s->cio->write(outs.c_str(), outs.size());
+  }
+}

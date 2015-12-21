@@ -215,7 +215,11 @@ void RGWListBuckets::execute()
 
 //    ret = rgw_read_user_buckets(store, s->user.user_id, buckets,
 //                                marker, read_count, should_get_stats(), 0);
-
+    RGWBucketEnt test;
+    test.bucket.name = "bucket1";
+    buckets.add(test);
+    read_count=2;
+    
     if (ret < 0) {
       /* hmm.. something wrong here.. the user was authenticated, so it
          should exist */
@@ -310,7 +314,58 @@ void RGWListBucket::execute()
 #endif
 }
 
+/**
+ * Generate the CORS header response
+ *
+ * This is described in the CORS standard, section 6.2.
+ */
+bool RGWOp::generate_cors_headers(string& origin, string& method, string& headers, string& exp_headers, unsigned *max_age)
+{
+  /* CORS 6.2.1. */
+  const char *orig = s->info.env->get("HTTP_ORIGIN");
+  if (!orig) {
+    return false;
+  }
 
+  /* Custom: */
+  origin = orig;
+  int ret = read_bucket_cors();
+  if (ret < 0) {
+    return false;
+  }
+
+  if (!cors_exist) {
+    dout(2) << "No CORS configuration set yet for this bucket" << dendl;
+    return false;
+  }
+
+  /* CORS 6.2.2. */
+//  RGWCORSRule *rule = bucket_cors.host_name_rule(orig);
+//  if (!rule)
+//    return false;
+
+  /* CORS 6.2.3. */
+  const char *req_meth = s->info.env->get("HTTP_ACCESS_CONTROL_REQUEST_METHOD");
+  if (!req_meth) {
+    req_meth = s->info.method;
+  }
+
+  if (req_meth) {
+    method = req_meth;
+    /* CORS 6.2.5. */
+//    if (!validate_cors_rule_method(rule, req_meth)) {
+//     return false;
+//    }
+  }
+
+  /* CORS 6.2.4. */
+  const char *req_hdrs = s->info.env->get("HTTP_ACCESS_CONTROL_REQUEST_HEADERS");
+
+  /* CORS 6.2.6. */
+//  get_cors_response_headers(rule, req_hdrs, headers, exp_headers, max_age);
+
+  return true;
+}
 
 
 

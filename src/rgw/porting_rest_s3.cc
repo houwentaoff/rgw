@@ -344,6 +344,63 @@ RGWOp *RGWHandler_ObjStore_Bucket_S3::op_options()
 {
   return NULL;//new RGWOptionsCORS_ObjStore_S3;
 }
+void RGWListBuckets_ObjStore_S3::send_response_begin(bool has_buckets)
+{
+  //if (ret)
+  //  set_req_state_err(s, ret);
+  dump_errno(s);
+  dump_start(s);
+  end_header(s, NULL, "application/xml");
+
+  if (!ret) {
+    list_all_buckets_start(s);
+//    dump_owner(s, s->user.user_id, s->user.display_name);
+    s->formatter->open_array_section("Buckets");
+    sent_data = true;
+  }
+}
+void dump_bucket(struct req_state *s, RGWBucketEnt& obj)
+{
+  s->formatter->open_object_section("Bucket");
+  s->formatter->dump_string("Name", obj.bucket.name);
+  dump_time(s, "CreationDate", &obj.creation_time);
+  s->formatter->close_section();
+}
+
+void RGWListBuckets_ObjStore_S3::send_response_data(RGWUserBuckets& buckets)
+{
+  if (!sent_data)
+    return;
+
+  map<string, RGWBucketEnt>& m = buckets.get_buckets();
+  map<string, RGWBucketEnt>::iterator iter;
+
+  for (iter = m.begin(); iter != m.end(); ++iter) {
+    RGWBucketEnt obj = iter->second;
+    dump_bucket(s, obj);
+  }
+  rgw_flush_formatter(s, s->formatter);
+}
+
+void RGWListBuckets_ObjStore_S3::send_response_end()
+{
+  if (sent_data) {
+    s->formatter->close_section();
+    list_all_buckets_end(s);
+    rgw_flush_formatter_and_reset(s, s->formatter);
+  }
+}
+
+void list_all_buckets_start(struct req_state *s)
+{
+  s->formatter->open_array_section_in_ns("ListAllMyBucketsResult",
+			      "http://s3.amazonaws.com/doc/2006-03-01/");
+}
+
+void list_all_buckets_end(struct req_state *s)
+{
+  s->formatter->close_section();
+}
 
 
 

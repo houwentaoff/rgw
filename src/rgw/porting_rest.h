@@ -100,6 +100,25 @@ public:
   ~RGWListBucket_ObjStore() {}
 };
 
+static const int64_t NO_CONTENT_LENGTH = -1;
+
+extern void set_req_state_err(struct req_state *s, int err_no);
+extern void dump_errno(struct req_state *s);
+extern void dump_errno(struct req_state *s, int ret);
+extern void dump_start(struct req_state *s);
+extern void end_header(struct req_state *s,
+                       RGWOp *op = NULL,
+                       const char *content_type = NULL,
+                       const int64_t proposed_content_length = NO_CONTENT_LENGTH,
+		       bool force_content_type = false);
+extern void list_all_buckets_start(struct req_state *s);
+extern void dump_owner(struct req_state *s, string& id, string& name, const char *section = NULL);
+extern void list_all_buckets_end(struct req_state *s);
+extern void dump_time(struct req_state *s, const char *name, time_t *t);
+extern void rgw_flush_formatter(struct req_state *s,
+                                         ceph::Formatter *formatter);
+extern void rgw_flush_formatter_and_reset(struct req_state *s,
+					 ceph::Formatter *formatter);
 
 
 #endif

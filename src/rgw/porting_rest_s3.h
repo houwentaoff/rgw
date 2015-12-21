@@ -135,9 +135,9 @@ public:
     limit = -1; /* no limit */
     return 0;
   }
-  virtual void send_response_begin(bool has_buckets){};
-  virtual void send_response_data(RGWUserBuckets& buckets){};
-  virtual void send_response_end(){};
+  virtual void send_response_begin(bool has_buckets);
+  virtual void send_response_data(RGWUserBuckets& buckets);
+  virtual void send_response_end();
 };
 
 #endif
