@@ -60,9 +60,12 @@
 #include <errno.h>
 #include "porting_rest_bucket.h"
 
+#include "global/global.h"
+#include "common/shell.h"
+
 #define SOCKET_BACKLOG 1024
 
-#define RGW_THREAD_POOL_SIZE   1
+#define RGW_THREAD_POOL_SIZE   G.rgw_thread_pool_size
 
 CephContext *g_ceph_context = NULL;
 
@@ -656,6 +659,14 @@ done:
  */
 int main ( int argc, char *argv[] )
 {
+    INIT_G(); 
+    
+    G.logFileSize                   = _M(100);
+    G.logFile.fd                    = STDOUT_FILENO;
+    G.hostname                      = shell_execute("hostname");
+    G.rgw_thread_pool_size          = 1;
+    G.rgw_list_buckets_max_chunk    = 1000;
+    
     ldout(0, 0)<<"hello world\n"<<dendl;
 //    check_curl();    
     curl_global_init(CURL_GLOBAL_ALL);

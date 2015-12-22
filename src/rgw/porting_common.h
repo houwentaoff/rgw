@@ -35,7 +35,7 @@
 #include "cls/version/cls_version_types.h"
 #include "cls/rgw/cls_rgw_types.h"
 //#include "porting_bucket.h"
-
+#include "global/global.h"
 
 using namespace std;
 

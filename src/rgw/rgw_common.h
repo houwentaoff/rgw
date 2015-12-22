@@ -592,6 +592,7 @@ WRITE_CLASS_ENCODER(RGWUserInfo)
 #endif
 struct rgw_bucket {
   std::string name;
+ /* :TODO:2015/12/22 15:54:13:hwt:   not use*/
   std::string data_pool;
   std::string data_extra_pool; /* if not set, then we should use data_pool instead */
   std::string index_pool;
@@ -601,7 +602,7 @@ struct rgw_bucket {
   std::string oid; /*
                     * runtime in-memory only info. If not empty, points to the bucket instance object
                     */
-
+ /* :TODO:End---  */
   rgw_bucket() { }
   rgw_bucket(const cls_user_bucket& b) {
     name = b.name;

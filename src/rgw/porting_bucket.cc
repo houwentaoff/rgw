@@ -58,7 +58,7 @@ int rgw_read_user_buckets(RGWRados * store,
 //  rgw_obj obj(store->zone.user_uid_pool, buckets_obj_id);
   rgw_obj obj();
   bufferlist header;
-//  list<cls_user_bucket_entry> entries;
+  list<cls_user_bucket_entry> entries;
 
   bool truncated = false;
   string m = marker;
@@ -70,18 +70,18 @@ int rgw_read_user_buckets(RGWRados * store,
   }
 
   do {
-//    ret = store->cls_user_list_buckets(obj, m, max - total, entries, &m, &truncated);
+    ret = store->cls_user_list_buckets(obj, m, max - total, entries, &m, &truncated);
     if (ret == -ENOENT)
       ret = 0;
 
     if (ret < 0)
       return ret;
 
-//    for (list<cls_user_bucket_entry>::iterator q = entries.begin(); q != entries.end(); ++q) {
-//      RGWBucketEnt e(*q);
-//      buckets.add(e);
-//      total++;
-//    }
+    for (list<cls_user_bucket_entry>::iterator q = entries.begin(); q != entries.end(); ++q) {
+      RGWBucketEnt e(*q);
+      buckets.add(e);
+      total++;
+    }
 
   } while (truncated && total < max);
 

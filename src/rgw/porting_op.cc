@@ -190,7 +190,7 @@ void RGWListBuckets::execute()
   bool started = false;
   uint64_t total_count = 0;
 
-  uint64_t max_buckets = 0;//s->cct->_conf->rgw_list_buckets_max_chunk;
+  uint64_t max_buckets = G.rgw_list_buckets_max_chunk;//s->cct->_conf->rgw_list_buckets_max_chunk;
 
   ret = get_params();
   if (ret < 0) {
@@ -213,8 +213,8 @@ void RGWListBuckets::execute()
       read_count = max_buckets;
     }
 
-//    ret = rgw_read_user_buckets(store, s->user.user_id, buckets,
-//                                marker, read_count, should_get_stats(), 0);
+    ret = rgw_read_user_buckets(store, s->user.user_id, buckets,
+                                marker, read_count, should_get_stats(), 0);
     RGWBucketEnt test;
     test.bucket.name = "bucket1";
     buckets.add(test);

@@ -23,7 +23,7 @@ INCLUDES 		 =  -I../
 
 include ../lib.rules
 
-BASE_OBJS = escape.o errno.o assert.o signal.o io_priority.o simple_spin.o buffer.o safe_io.o str_list.o ceph_json.o mime.o utf8.o armor.o WorkQueue.o  Thread.o page.o Mutex.o  Formatter.o Clock.o lockdep.o environment.o code_environment.o PrebufferedStreambuf.o strtol.o dout.o BackTrace.o # WorkQueue.o Thread.o Clock.o# entity_name.o ceph_context.o ceph_crypto.o admin_socket.o \
+BASE_OBJS = shell.o escape.o errno.o assert.o signal.o io_priority.o simple_spin.o buffer.o safe_io.o str_list.o ceph_json.o mime.o utf8.o armor.o WorkQueue.o  Thread.o page.o Mutex.o  Formatter.o Clock.o lockdep.o environment.o code_environment.o PrebufferedStreambuf.o strtol.o dout.o BackTrace.o # WorkQueue.o Thread.o Clock.o# entity_name.o ceph_context.o ceph_crypto.o admin_socket.o \
 		   signal.o Thread.o code_environment.o admin_socket_client.o errno.o safe_io.o armor.o Clock.o  \
 		   
 
