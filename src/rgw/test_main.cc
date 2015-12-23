@@ -59,6 +59,7 @@
 #include "common/BackTrace.h"
 #include <errno.h>
 #include "porting_rest_bucket.h"
+#include "porting_rados.h"
 
 #include "global/global.h"
 #include "common/shell.h"

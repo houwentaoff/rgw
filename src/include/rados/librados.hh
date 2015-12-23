@@ -47,15 +47,26 @@ namespace librados
   class CEPH_RADOS_API ObjectOperation
   {
   public:
-    ObjectOperation();
-    virtual ~ObjectOperation();
-    void exec(const char *cls, const char *method, bufferlist& inbl);
-    void exec(const char *cls, const char *method, bufferlist& inbl, bufferlist *obl, int *prval);
+    ObjectOperation(){};
+    virtual ~ObjectOperation(){};
+    void exec(const char *cls, const char *method, bufferlist& inbl){};
+    void exec(const char *cls, const char *method, bufferlist& inbl, bufferlist *obl, int *prval){};
   protected:
 //    ObjectOperationImpl *impl;
-    ObjectOperation(const ObjectOperation& rhs);
-    ObjectOperation& operator=(const ObjectOperation& rhs);
+    ObjectOperation(const ObjectOperation& rhs){};
+    ObjectOperation& operator=(const ObjectOperation& rhs){};
     
   }; 
+  /*
+   * ObjectReadOperation : compound object operation that return value
+   * Batch multiple object operations into a single request, to be applied
+   * atomically.
+   */
+  class CEPH_RADOS_API ObjectReadOperation : public ObjectOperation
+  {
+    public:
+        ObjectReadOperation() {}
+        ~ObjectReadOperation() {}
+  };
 }
 #endif

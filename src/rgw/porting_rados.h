@@ -19,12 +19,16 @@
 
 #ifndef __PORTING_RADOS_H__
 #define __PORTING_RADOS_H__
+
+#include "porting_common.h"
+#include "cls/user/cls_user_types.h"
+
 class RGWRados
 {
     public:
         RGWRados(){}
         ~RGWRados(){}
-    publibc:
+    public:
       int cls_user_list_buckets(rgw_obj& obj,
                             const string& in_marker, int max_entries,
                             list<cls_user_bucket_entry>& entries,

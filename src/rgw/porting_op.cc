@@ -17,6 +17,7 @@
  * =====================================================================================
  */
 #include "porting_op.h"
+#include "global/global.h"
 
 int RGWOp::verify_op_mask()
 {
@@ -215,10 +216,10 @@ void RGWListBuckets::execute()
 
     ret = rgw_read_user_buckets(store, s->user.user_id, buckets,
                                 marker, read_count, should_get_stats(), 0);
-    RGWBucketEnt test;
-    test.bucket.name = "bucket1";
-    buckets.add(test);
-    read_count=2;
+//    RGWBucketEnt test;
+//    test.bucket.name = "bucket1";
+//    buckets.add(test);
+//    read_count=2;
     
     if (ret < 0) {
       /* hmm.. something wrong here.. the user was authenticated, so it

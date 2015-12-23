@@ -17,6 +17,8 @@
  * =====================================================================================
  */
 #include "porting_rados.h"
+#include "cls/user/cls_user_client.h"
+#include "include/rados/librados.hh"
 
 int RGWRados::cls_user_list_buckets(rgw_obj& obj,
                                     const string& in_marker, int max_entries,

@@ -20,6 +20,7 @@
 #define __CLS_USER_CLIENT_H__
 
 #include "include/types.h"
+#include "cls_user_types.h"
 #include "include/rados/librados.hh"
 
 void cls_user_bucket_list(librados::ObjectReadOperation& op,

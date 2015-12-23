@@ -8,7 +8,7 @@
 
 #include "common/errno.h"
 #include "common/ceph_json.h"
-//#include "rgw_rados.h"
+#include "porting_rados.h"
 #include "porting_acl.h"
 #include "porting_acl_s3.h"
 #include "include/porting.h"
@@ -20,7 +20,7 @@
 // until everything is moved from rgw_common
 #include "porting_common.h"
 
-//#include "cls/user/cls_user_types.h"
+#include "cls/user/cls_user_types.h"
 
 #define dout_subsys ceph_subsys_rgw
 
@@ -56,7 +56,7 @@ int rgw_read_user_buckets(RGWRados * store,
   rgw_get_buckets_obj(user_id, buckets_obj_id);
   bufferlist bl;
 //  rgw_obj obj(store->zone.user_uid_pool, buckets_obj_id);
-  rgw_obj obj();
+  rgw_obj obj;
   bufferlist header;
   list<cls_user_bucket_entry> entries;
 

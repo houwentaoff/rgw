@@ -57,6 +57,7 @@ class heartbeat_handle_d
 //{
 //
 //};
+#if 0
 struct cls_user_bucket
 {
     std::string name;
@@ -66,6 +67,7 @@ struct cls_user_bucket
     std::string bucket_id;
     std::string data_extra_pool;
 };
+#endif
 class Throttle 
 {
     public:
@@ -85,11 +87,12 @@ class   RGWEnv
 
 };
 #endif
+#if 0
 class RGWRados
 {
 
 };
-
+#endif
 #if 0 
 /* ************************************ use  *********************************/
 /* rgw_common_porting */

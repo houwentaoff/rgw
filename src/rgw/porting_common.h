@@ -34,8 +34,7 @@
 #include "common/ceph_json.h"
 #include "cls/version/cls_version_types.h"
 #include "cls/rgw/cls_rgw_types.h"
-//#include "porting_bucket.h"
-#include "global/global.h"
+#include "cls/user/cls_user_types.h"
 
 using namespace std;
 
@@ -379,13 +378,13 @@ struct rgw_bucket {
                     */
 
   rgw_bucket() { }
-  rgw_bucket(void *b/*const cls_user_bucket& b*/) {
-//    name = b.name;
-//    data_pool = b.data_pool;
-//    data_extra_pool = b.data_extra_pool;
-//    index_pool = b.index_pool;
-//    marker = b.marker;
-//    bucket_id = b.bucket_id;
+  rgw_bucket(const cls_user_bucket& b) {
+    name = b.name;
+    data_pool = b.data_pool;
+    data_extra_pool = b.data_extra_pool;
+    index_pool = b.index_pool;
+    marker = b.marker;
+    bucket_id = b.bucket_id;
   }
   rgw_bucket(const char *n) : name(n) {
     assert(*n == '.'); // only rgw private buckets should be initialized without pool
@@ -395,13 +394,13 @@ struct rgw_bucket {
   rgw_bucket(const char *n, const char *dp, const char *ip, const char *m, const char *id, const char *h) :
     name(n), data_pool(dp), index_pool(ip), marker(m), bucket_id(id) {}
 
-  void convert(void *p/*cls_user_bucket *b*/) {
-//    b->name = name;
-//    b->data_pool = data_pool;
-//    b->data_extra_pool = data_extra_pool;
-//    b->index_pool = index_pool;
-//    b->marker = marker;
-//    b->bucket_id = bucket_id;
+  void convert(cls_user_bucket *b) {
+    b->name = name;
+    b->data_pool = data_pool;
+    b->data_extra_pool = data_extra_pool;
+    b->index_pool = index_pool;
+    b->marker = marker;
+    b->bucket_id = bucket_id;
   }
 
   void encode(bufferlist& bl) const {
@@ -1116,20 +1115,20 @@ struct RGWBucketEnt {
 
   RGWBucketEnt() : size(0), size_rounded(0), creation_time(0), count(0) {}
 
-//  RGWBucketEnt(const cls_user_bucket_entry& e) {
-//    bucket = e.bucket;
-//    size = e.size;
-//    size_rounded = e.size_rounded;
-//    creation_time = e.creation_time;
-//    count = e.count;
-//  }
+  RGWBucketEnt(const cls_user_bucket_entry& e) {
+    bucket = e.bucket;
+    size = e.size;
+    size_rounded = e.size_rounded;
+    creation_time = e.creation_time;
+    count = e.count;
+  }
 
-  void convert(void *p/*  cls_user_bucket_entry *b*/) {
-//    bucket.convert(&b->bucket);
-//    b->size = size;
-//    b->size_rounded = size_rounded;
-//    b->creation_time = creation_time;
-//    b->count = count;
+  void convert(cls_user_bucket_entry *b) {
+    bucket.convert(&b->bucket);
+    b->size = size;
+    b->size_rounded = size_rounded;
+    b->creation_time = creation_time;
+    b->count = count;
   }
 
   void encode(bufferlist& bl) const {
@@ -1288,7 +1287,7 @@ struct req_state {
     uint32_t perm_mask;
     utime_t header_time;
 
-//    rgw_bucket bucket;
+    rgw_bucket bucket;
     string bucket_name_str;
     rgw_obj_key object;
     string src_bucket_name;
@@ -1305,7 +1304,7 @@ struct req_state {
 
     bool has_bad_meta;
 
-//    RGWUserInfo user; 
+    RGWUserInfo user; 
 //    RGWAccessControlPolicy *bucket_acl;
 //    RGWAccessControlPolicy *object_acl;
 
