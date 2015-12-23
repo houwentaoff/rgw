@@ -32,9 +32,9 @@ string shell_execute(const char * cmd)
         printf("popen fail\n");
         goto err;
     }
-    if (NULL == fgets(ret, 512, fp))
+    if (0 == fread((void *)ret, sizeof(char), 512, fp))
     {
-        printf("fgets null\n");
+        printf("fread 0\n");
     }
     pclose(fp);    
 

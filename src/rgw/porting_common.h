@@ -1365,4 +1365,8 @@ extern int gen_rand_alphanumeric_plain(CephContext *cct, char *dest, int size);
 
 extern int gen_rand_alphanumeric_lower(CephContext *cct, string *str, int length);
 
+/** Check if the req_state's user has the necessary permissions
+ * to do the requested action */
+extern bool verify_bucket_permission(struct req_state *s, int perm);
+
 #endif

@@ -139,6 +139,17 @@ public:
   virtual void send_response_data(RGWUserBuckets& buckets);
   virtual void send_response_end();
 };
+class RGWListBucket_ObjStore_S3 : public RGWListBucket_ObjStore {
+public:
+  RGWListBucket_ObjStore_S3() {
+    default_max = 1000;
+  }
+  ~RGWListBucket_ObjStore_S3() {}
+
+  int get_params();
+  void send_response();
+  void send_versioned_response();
+};
 
 #endif
 

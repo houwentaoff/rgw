@@ -692,3 +692,14 @@ void rgw_flush_formatter(struct req_state *s, Formatter *formatter)
     s->cio->write(outs.c_str(), outs.size());
   }
 }
+
+void dump_owner(struct req_state *s, string& id, string& name, const char *section)
+{
+  if (!section)
+    section = "Owner";
+  s->formatter->open_object_section(section);
+  s->formatter->dump_string("ID", id);
+  s->formatter->dump_string("DisplayName", name);
+  s->formatter->close_section();
+}
+

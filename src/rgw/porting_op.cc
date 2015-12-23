@@ -17,6 +17,7 @@
  * =====================================================================================
  */
 #include "porting_op.h"
+#include "porting_common.h"
 #include "global/global.h"
 
 int RGWOp::verify_op_mask()
@@ -261,6 +262,15 @@ send_end:
   }
   send_response_end();
 }
+
+int RGWListBucket::verify_permission()
+{
+  if (!verify_bucket_permission(s, RGW_PERM_READ))
+    return -EACCES;
+
+  return 0;
+}
+
 void RGWListBucket::pre_exec()
 {
 //  rgw_bucket_object_pre_exec(s);
@@ -291,14 +301,25 @@ void RGWListBucket::execute()
 
   if (need_container_stats()) {
     map<string, RGWBucketEnt> m;
-//    m[s->bucket.name] = RGWBucketEnt();
-//    m.begin()->second.bucket = s->bucket;
-//    ret = store->update_containers_stats(m);
+    m[s->bucket.name] = RGWBucketEnt();
+    m.begin()->second.bucket = s->bucket;
+    ret = 0;//store->update_containers_stats(m);
     if (ret > 0) {
       bucket = m.begin()->second;
     }
   }
-
+  RGWObjEnt ent;
+  ent.ns = "ns"; 
+  ent.owner = "hwttt";
+  ent.size = 10000;
+  ent.etag = "etag";
+  ent.tag = "tagg";
+  ent.owner_display_name = "htw display";
+  ent.content_type = ".jpg";
+  objs.push_back(ent);
+  ent.owner = "aaaaaas";
+  ent.size = 100;
+  objs.push_back(ent);
 //  RGWRados::Bucket target(store, s->bucket);
 //  RGWRados::Bucket::List list_op(&target);
 #if 0

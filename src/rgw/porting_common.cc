@@ -369,4 +369,70 @@ bool rgw_err::is_err() const
 {
   return !(http_ret >= 200 && http_ret <= 399);
 }
+bool verify_bucket_permission(struct req_state *s, int perm)
+{
+#if 0
+  if (!s->bucket_acl)
+    return false;
 
+  if ((perm & (int)s->perm_mask) != perm)
+    return false;
+
+  if (!verify_requester_payer_permission(s))
+    return false;
+
+  return s->bucket_acl->verify_permission(s->user.user_id, perm, perm);    
+#endif
+  return true;
+}
+
+static bool char_needs_url_encoding(char c)
+{
+  if (c <= 0x20 || c >= 0x7f)
+    return true;
+
+  switch (c) {
+    case 0x22:
+    case 0x23:
+    case 0x25:
+    case 0x26:
+    case 0x2B:
+    case 0x2C:
+    case 0x2F:
+    case 0x3A:
+    case 0x3B:
+    case 0x3C:
+    case 0x3E:
+    case 0x3D:
+    case 0x3F:
+    case 0x40:
+    case 0x5B:
+    case 0x5D:
+    case 0x5C:
+    case 0x5E:
+    case 0x60:
+    case 0x7B:
+    case 0x7D:
+      return true;
+  }
+  return false;
+}
+static void escape_char(char c, string& dst)
+{
+  char buf[16];
+  snprintf(buf, sizeof(buf), "%%%.2X", (int)(unsigned char)c);
+  dst.append(buf);
+}
+
+void url_encode(const string& src, string& dst)
+{
+  const char *p = src.c_str();
+  for (unsigned i = 0; i < src.size(); i++, p++) {
+    if (char_needs_url_encoding(*p)) {
+      escape_char(*p, dst);
+      continue;
+    }
+
+    dst.append(p, 1);
+  }
+}
