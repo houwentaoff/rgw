@@ -33,4 +33,5 @@ void globals::init()
     hostname             = "";
     rgw_thread_pool_size = 0;
     rgw_list_buckets_max_chunk = 0;
+    rgw_relaxed_s3_bucket_names        = true;
 }

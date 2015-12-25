@@ -21,6 +21,7 @@
 #include "porting_common.h"
 #include "porting_op.h"
 #include "common/utf8.h"
+#include "common/Formatter.h"
 
 #define CORS_MAX_AGE_INVALID ((uint32_t)-1)
 #define TIME_BUF_SIZE 128
@@ -701,5 +702,56 @@ void dump_owner(struct req_state *s, string& id, string& name, const char *secti
   s->formatter->dump_string("ID", id);
   s->formatter->dump_string("DisplayName", name);
   s->formatter->close_section();
+}
+void dump_continue(struct req_state *s)
+{
+  s->cio->send_100_continue();
+}
+void dump_bucket_from_state(struct req_state *s)
+{
+  int expose_bucket = 1;//g_conf->rgw_expose_bucket;
+  if (expose_bucket) {
+    if (!s->bucket_name_str.empty()) {
+      string b;
+      url_encode(s->bucket_name_str, b);
+      s->cio->print("Bucket: %s\r\n", b.c_str());
+    }
+  }
+}
+void dump_redirect(struct req_state *s, const string& redirect)
+{
+  if (redirect.empty())
+    return;
+
+  s->cio->print("Location: %s\r\n", redirect.c_str());
+}
+
+void abort_early(struct req_state *s, RGWOp *op, int err_no)
+{
+  if (!s->formatter) {
+    s->formatter = new JSONFormatter;
+    s->format = RGW_FORMAT_JSON;
+  }
+  set_req_state_err(s, err_no);
+  dump_errno(s);
+  dump_bucket_from_state(s);
+  if (err_no == -ERR_PERMANENT_REDIRECT && !s->region_endpoint.empty()) {
+    string dest_uri = s->region_endpoint;
+    /*
+     * reqest_uri is always start with slash, so we need to remove
+     * the unnecessary slash at the end of dest_uri.
+     */
+    if (dest_uri[dest_uri.size() - 1] == '/') {
+      dest_uri = dest_uri.substr(0, dest_uri.size() - 1);
+    }
+    dest_uri += s->info.request_uri;
+    dest_uri += "?";
+    dest_uri += s->info.request_params;
+
+    dump_redirect(s, dest_uri);
+  }
+  end_header(s, op);
+  rgw_flush_formatter_and_reset(s, s->formatter);
+//  perfcounter->inc(l_rgw_failed_req);
 }
 

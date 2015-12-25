@@ -18,6 +18,8 @@
  */
 #include "porting_op.h"
 #include "porting_common.h"
+#include "porting_rest.h"
+#include "porting_rados.h"
 #include "global/global.h"
 
 int RGWOp::verify_op_mask()
@@ -127,9 +129,123 @@ int RGWHandler::init(RGWRados *_store, struct req_state *_s, RGWClientIO *cio)
   return 0;
 }
 
+/**
+ * Get the AccessControlPolicy for a bucket or object off of disk.
+ * s: The req_state to draw information from.
+ * only_bucket: If true, reads the bucket ACL rather than the object ACL.
+ * Returns: 0 on success, -ERR# otherwise.
+ */
+static int rgw_build_policies(RGWRados *store, struct req_state *s, bool only_bucket, bool prefetch_data)
+{
+  int ret = 0;
+  rgw_obj_key obj;
+  RGWUserInfo bucket_owner_info;
+  RGWObjectCtx& obj_ctx = *static_cast<RGWObjectCtx *>(s->obj_ctx);
+
+  string bi = s->info.args.get(RGW_SYS_PARAM_PREFIX "bucket-instance");
+  if (!bi.empty()) {
+    int shard_id;
+    ret = rgw_bucket_parse_bucket_instance(bi, &s->bucket_instance_id, &shard_id);
+    if (ret < 0) {
+      return ret;
+    }
+  }
+
+  if(s->dialect.compare("s3") == 0) {
+//    s->bucket_acl = new RGWAccessControlPolicy_S3(s->cct);
+  } else if(s->dialect.compare("swift")  == 0) {
+    //s->bucket_acl = new RGWAccessControlPolicy_SWIFT(s->cct);
+  } else {
+    //s->bucket_acl = new RGWAccessControlPolicy(s->cct);
+  }
+
+  if (s->copy_source) { /* check if copy source is within the current domain */
+    const char *src = s->copy_source;
+    if (*src == '/')
+      ++src;
+    string copy_source_str(src);
+
+    int pos = copy_source_str.find('/');
+    if (pos > 0)
+      copy_source_str = copy_source_str.substr(0, pos);
+
+    RGWBucketInfo source_info;
+
+    ret = store->get_bucket_info(obj_ctx, copy_source_str, source_info, NULL);
+    if (ret == 0) {
+      string& region = source_info.region;
+//      s->local_source = store->region.equals(region);
+    }
+  }
+
+  if (!s->bucket_name_str.empty()) {
+    s->bucket_exists = true;
+    if (s->bucket_instance_id.empty()) {
+      ret = store->get_bucket_info(obj_ctx, s->bucket_name_str, s->bucket_info, NULL, &s->bucket_attrs);
+    } else {
+//      ret = store->get_bucket_instance_info(obj_ctx, s->bucket_instance_id, s->bucket_info, NULL, &s->bucket_attrs);
+    }
+    if (ret < 0) {
+      if (ret != -ENOENT) {
+        ldout(s->cct, 0) << "NOTICE: couldn't get bucket from bucket_name (name=" << s->bucket_name_str << ")" << dendl;
+        return ret;
+      }
+      s->bucket_exists = false;
+    }
+    s->bucket = s->bucket_info.bucket;
+
+    if (s->bucket_exists) {
+      rgw_obj_key no_obj;
+//      ret = read_policy(store, s, s->bucket_info, s->bucket_attrs, s->bucket_acl, s->bucket, no_obj);
+    } else {
+//      s->bucket_acl->create_default(s->user.user_id, s->user.display_name);
+      ret = -ERR_NO_SUCH_BUCKET;
+    }
+
+//    s->bucket_owner = s->bucket_acl->get_owner();
+
+    string& region = s->bucket_info.region;
+//    map<string, RGWRegion>::iterator dest_region = store->region_map.regions.find(region);
+//    if (dest_region != store->region_map.regions.end() && !dest_region->second.endpoints.empty()) {
+//      s->region_endpoint = dest_region->second.endpoints.front();
+//    }
+    if (s->bucket_exists /*&& !store->region.equals(region)*/) {
+//      ldout(s->cct, 0) << "NOTICE: request for data in a different region (" << region << " != " << store->region.name << ")" << dendl;
+      /* we now need to make sure that the operation actually requires copy source, that is
+       * it's a copy operation
+       */
+      if (/*store->region.is_master && */s->op == OP_DELETE && s->system_request) {
+        /*If the operation is delete and if this is the master, don't redirect*/
+      } else if (!s->local_source ||
+          (s->op != OP_PUT && s->op != OP_COPY) ||
+          s->object.empty()) {
+        return -ERR_PERMANENT_REDIRECT;
+      }
+    }
+  }
+
+  /* we're passed only_bucket = true when we specifically need the bucket's
+     acls, that happens on write operations */
+  if (!only_bucket && !s->object.empty()) {
+    if (!s->bucket_exists) {
+      return -ERR_NO_SUCH_BUCKET;
+    }
+//    s->object_acl = new RGWAccessControlPolicy(s->cct);
+
+    rgw_obj obj(s->bucket, s->object);
+    store->set_atomic(s->obj_ctx, obj);
+    if (prefetch_data) {
+      store->set_prefetch_data(s->obj_ctx, obj);
+    }
+//    ret = read_policy(store, s, s->bucket_info, s->bucket_attrs, s->object_acl, s->bucket, s->object);
+  }
+
+  return ret;
+}
+
 int RGWHandler::do_read_permissions(RGWOp *op, bool only_bucket)
 {
-  int ret = 0;// rgw_build_policies(store, s, only_bucket, op->prefetch_data());
+  int ret = rgw_build_policies(store, s, only_bucket, op->prefetch_data());
 #if 0
   if (ret < 0) {
     ldout(s->cct, 10) << "read_permissions on " << s->bucket << ":" <<s->object << " only_bucket=" << only_bucket << " ret=" << ret << dendl;
@@ -271,9 +387,17 @@ int RGWListBucket::verify_permission()
   return 0;
 }
 
+static void rgw_bucket_object_pre_exec(struct req_state *s)
+{
+  if (s->expect_cont)
+    dump_continue(s);
+
+  dump_bucket_from_state(s);
+}
+
 void RGWListBucket::pre_exec()
 {
-//  rgw_bucket_object_pre_exec(s);
+  rgw_bucket_object_pre_exec(s);
 }
 int RGWListBucket::parse_max_keys()
 {
@@ -388,6 +512,7 @@ bool RGWOp::generate_cors_headers(string& origin, string& method, string& header
 
   return true;
 }
+
 
 
 

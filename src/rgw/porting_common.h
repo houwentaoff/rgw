@@ -1262,6 +1262,50 @@ struct RGWBucketInfo
   RGWBucketInfo() : flags(0), creation_time(0), has_instance_obj(false), num_shards(0), bucket_index_shard_hash_type(MOD), requester_pays(false) {}
 };
 WRITE_CLASS_ENCODER(RGWBucketInfo)
+struct RGWBucketEntryPoint
+{
+  rgw_bucket bucket;
+  string owner;
+  time_t creation_time;
+  bool linked;
+
+  bool has_bucket_info;
+  RGWBucketInfo old_bucket_info;
+
+  RGWBucketEntryPoint() : creation_time(0), linked(false), has_bucket_info(false) {}
+
+  void encode(bufferlist& bl) const {
+    ENCODE_START(8, 8, bl);
+    ::encode(bucket, bl);
+    ::encode(owner, bl);
+    ::encode(linked, bl);
+    uint64_t ctime = (uint64_t)creation_time;
+    ::encode(ctime, bl);
+    ENCODE_FINISH(bl);
+  }
+  void decode(bufferlist::iterator& bl) {
+    bufferlist::iterator orig_iter = bl;
+    DECODE_START_LEGACY_COMPAT_LEN_32(8, 4, 4, bl);
+    if (struct_v < 8) {
+      /* ouch, old entry, contains the bucket info itself */
+      old_bucket_info.decode(orig_iter);
+      has_bucket_info = true;
+      return;
+    }
+    has_bucket_info = false;
+    ::decode(bucket, bl);
+    ::decode(owner, bl);
+    ::decode(linked, bl);
+    uint64_t ctime;
+    ::decode(ctime, bl);
+    creation_time = (uint64_t)ctime;
+    DECODE_FINISH(bl);
+  }
+
+  void dump(Formatter *f) const;
+  void decode_json(JSONObj *obj);
+};
+WRITE_CLASS_ENCODER(RGWBucketEntryPoint)
 
 /* * Store all the state necessary to complete and respond to an HTTP request*/
 class RGWClientIO;

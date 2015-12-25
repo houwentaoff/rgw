@@ -119,6 +119,12 @@ extern void rgw_flush_formatter(struct req_state *s,
                                          ceph::Formatter *formatter);
 extern void rgw_flush_formatter_and_reset(struct req_state *s,
 					 ceph::Formatter *formatter);
+extern void dump_continue(struct req_state *s);
+extern void dump_bucket_from_state(struct req_state *s);
+
+
+extern void abort_early(struct req_state *s, RGWOp *op, int err);
+extern void dump_redirect(struct req_state *s, const string& redirect);
 
 
 #endif

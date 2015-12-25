@@ -63,7 +63,9 @@ struct globals {
     /* listen thread zise */
     int rgw_thread_pool_size;
     /*  max buckets to retrieve in a single op when listing user buckets */
-    int rgw_list_buckets_max_chunk;    
+    int rgw_list_buckets_max_chunk;
+    /* allow bucket name start with '_' */
+    bool rgw_relaxed_s3_bucket_names;
 };
 
 #endif

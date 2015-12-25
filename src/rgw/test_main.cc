@@ -545,8 +545,8 @@ static int process_request(RGWRados *store, RGWREST *rest, RGWRequest *req, RGWC
 
   struct req_state *s = &rstate;
 
-  //RGWObjectCtx rados_ctx(store, s);
-  //s->obj_ctx = &rados_ctx;
+  RGWObjectCtx rados_ctx(store, s);
+  s->obj_ctx = &rados_ctx;
 
   //s->req_id = store->unique_id(req->id);
   //s->trans_id = store->unique_trans_id(req->id);
@@ -559,7 +559,7 @@ static int process_request(RGWRados *store, RGWREST *rest, RGWRequest *req, RGWC
   RGWRESTMgr *mgr;
   RGWHandler *handler = rest->get_handler(store, s, client_io, &mgr, &init_error);
   if (init_error != 0) {
-//    abort_early(s, NULL, init_error);
+    abort_early(s, NULL, init_error);
     goto done;
   }
 
@@ -568,7 +568,7 @@ static int process_request(RGWRados *store, RGWREST *rest, RGWRequest *req, RGWC
   req->log(s, "getting op");
   op = handler->get_op(store);
   if (!op) {
-//    abort_early(s, NULL, -ERR_METHOD_NOT_ALLOWED);
+    abort_early(s, NULL, -ERR_METHOD_NOT_ALLOWED);
     goto done;
   }
   req->op = op;
@@ -577,7 +577,7 @@ static int process_request(RGWRados *store, RGWREST *rest, RGWRequest *req, RGWC
   ret = handler->authorize();
   if (ret < 0) {
     dout(10) << "failed to authorize request" << dendl;
-  //  abort_early(s, op, ret);
+    abort_early(s, op, ret);
     goto done;
   }
 #if 0
@@ -590,21 +590,21 @@ static int process_request(RGWRados *store, RGWREST *rest, RGWRequest *req, RGWC
   req->log(s, "reading permissions");
   ret = handler->read_permissions(op);
   if (ret < 0) {
-    //abort_early(s, op, ret);
+    abort_early(s, op, ret);
     goto done;
   }
 
   req->log(s, "init op");
   ret = op->init_processing();
   if (ret < 0) {
-    //abort_early(s, op, ret);
+    abort_early(s, op, ret);
     goto done;
   }
 
   req->log(s, "verifying op mask");
   ret = op->verify_op_mask();
   if (ret < 0) {
-    //abort_early(s, op, ret);
+    abort_early(s, op, ret);
     goto done;
   }
 
@@ -614,7 +614,7 @@ static int process_request(RGWRados *store, RGWREST *rest, RGWRequest *req, RGWC
     if (s->system_request) {
       dout(2) << "overriding permissions due to system operation" << dendl;
     } else {
-      //abort_early(s, op, ret);
+      abort_early(s, op, ret);
       goto done;
     }
   }
@@ -622,7 +622,7 @@ static int process_request(RGWRados *store, RGWREST *rest, RGWRequest *req, RGWC
   req->log(s, "verifying op params");
   ret = op->verify_params();
   if (ret < 0) {
-    //abort_early(s, op, ret);
+    abort_early(s, op, ret);
     goto done;
   }
 

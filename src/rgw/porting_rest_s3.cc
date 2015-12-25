@@ -18,6 +18,7 @@
  */
 
 #include "porting_rest_s3.h"
+#include "global/global.h"
 
 static bool looks_like_ip_address(const char *bucket)
 {
@@ -97,7 +98,7 @@ int RGWHandler_ObjStore_S3::init(RGWRados *store, struct req_state *s, RGWClient
 {
   dout(10) << "s->object=" << (!s->object.empty() ? s->object : rgw_obj_key("<NULL>")) << " s->bucket=" << (!s->bucket_name_str.empty() ? s->bucket_name_str : "<NULL>") << dendl;
 
-  bool relaxed_names = false;//= s->cct->_conf->rgw_relaxed_s3_bucket_names;
+  bool relaxed_names = G.rgw_relaxed_s3_bucket_names;//= s->cct->_conf->rgw_relaxed_s3_bucket_names;
   int ret = validate_bucket_name(s->bucket_name_str, relaxed_names);
   if (ret)
     return ret;
