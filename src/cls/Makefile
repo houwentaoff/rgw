@@ -23,7 +23,7 @@ INCLUDES 		 =  -I../
 
 include ../lib.rules
 
-LIB_OBJS 		 =  user/cls_user_client.o rgw/cls_rgw_types.o
+LIB_OBJS 		 =  user/cls_user_client.o rgw/cls_rgw_types.o rgw/cls_rgw_ops.o rgw/cls_rgw_client.o
 
 MODULE_TARGETS = $(MODULE_LIBS)
 

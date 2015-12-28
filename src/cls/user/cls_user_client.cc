@@ -20,6 +20,7 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include "common/shell.h"
+#include "global/global.h"
 
 
 void cls_user_bucket_list(librados::ObjectReadOperation& op,
@@ -38,7 +39,9 @@ void cls_user_bucket_list(librados::ObjectReadOperation& op,
 #endif
   cls_user_bucket_entry tmp;
   vector<string> fileVec;
-  string files = shell_execute("ls /fisamba");
+  char cmd_buf[512] = {0};
+  sprintf(cmd_buf, "ls %s", G.buckets_root.c_str());
+  string files = shell_execute(cmd_buf);
   if (files == "")
   {
       return;

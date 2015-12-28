@@ -595,7 +595,7 @@ static int process_request(RGWRados *store, RGWREST *rest, RGWRequest *req, RGWC
     goto done;
   }
   req->log(s, "reading permissions");
-  ret = handler->read_permissions(op);
+  ret = handler->read_permissions(op);//not exist return error;
   if (ret < 0) {
     abort_early(s, op, ret);
     goto done;

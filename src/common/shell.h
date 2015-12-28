@@ -29,6 +29,13 @@
  * @return 
  */
 std::string shell_execute(const char * cmd);
-
+/**
+ * @brief
+ *
+ * @param cmd
+ *
+ * @return result of shell `cmd` 
+ */
+int shell_simple(const char *cmd);
 #endif
 

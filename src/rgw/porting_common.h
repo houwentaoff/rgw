@@ -456,6 +456,27 @@ struct rgw_bucket {
   }
 };
 WRITE_CLASS_ENCODER(rgw_bucket)
+inline ostream& operator<<(ostream& out, const rgw_bucket &b) {
+  out << b.name;
+  if (b.name.compare(b.data_pool)) {
+    out << "(@";
+    string s;
+    if (!b.index_pool.empty() && b.data_pool.compare(b.index_pool))
+      s = "i=" + b.index_pool;
+    if (!b.data_extra_pool.empty() && b.data_pool.compare(b.data_extra_pool)) {
+      if (!s.empty()) {
+        s += ",";
+      }
+      s += "e=" + b.data_extra_pool;
+    }
+    if (!s.empty()) {
+      out << "{"  << s << "}";
+    }
+
+    out << b.data_pool << "[" << b.marker << "])";
+  }
+  return out;
+}
     
 class rgw_obj {
   std::string orig_obj;
@@ -1306,6 +1327,10 @@ struct RGWBucketEntryPoint
   void decode_json(JSONObj *obj);
 };
 WRITE_CLASS_ENCODER(RGWBucketEntryPoint)
+
+inline ostream& operator<<(ostream& out, const rgw_obj &o) {
+  return out << o.bucket.name << ":" << o.get_object();
+}
 
 /* * Store all the state necessary to complete and respond to an HTTP request*/
 class RGWClientIO;

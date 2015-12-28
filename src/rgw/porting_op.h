@@ -210,7 +210,7 @@ public:
   virtual const string name() { return "list_bucket"; }
   virtual RGWOpType get_type() { return RGW_OP_LIST_BUCKET; }
   virtual uint32_t op_mask() { return RGW_OP_TYPE_READ; }
-  virtual bool need_container_stats() { return false; }
+  virtual bool need_container_stats() { return false; }//just swift need
 };
 
 #endif

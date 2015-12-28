@@ -172,7 +172,7 @@ static int rgw_build_policies(RGWRados *store, struct req_state *s, bool only_bu
     RGWBucketInfo source_info;
 
     ret = store->get_bucket_info(obj_ctx, copy_source_str, source_info, NULL);
-    if (ret == 0) {
+    if (ret == 0) {//bucket is exist ????
       string& region = source_info.region;
 //      s->local_source = store->region.equals(region);
     }
@@ -185,7 +185,7 @@ static int rgw_build_policies(RGWRados *store, struct req_state *s, bool only_bu
     } else {
 //      ret = store->get_bucket_instance_info(obj_ctx, s->bucket_instance_id, s->bucket_info, NULL, &s->bucket_attrs);
     }
-    if (ret < 0) {
+    if (ret < 0) {//is not exist ....
       if (ret != -ENOENT) {
         ldout(s->cct, 0) << "NOTICE: couldn't get bucket from bucket_name (name=" << s->bucket_name_str << ")" << dendl;
         return ret;
@@ -209,7 +209,9 @@ static int rgw_build_policies(RGWRados *store, struct req_state *s, bool only_bu
 //    if (dest_region != store->region_map.regions.end() && !dest_region->second.endpoints.empty()) {
 //      s->region_endpoint = dest_region->second.endpoints.front();
 //    }
+#if 0    //redirect to other region
     if (s->bucket_exists /*&& !store->region.equals(region)*/) {
+        //s->local_source = true;//add by sean or it return ERR_PERMANENT_REDIRECT
 //      ldout(s->cct, 0) << "NOTICE: request for data in a different region (" << region << " != " << store->region.name << ")" << dendl;
       /* we now need to make sure that the operation actually requires copy source, that is
        * it's a copy operation
@@ -222,6 +224,7 @@ static int rgw_build_policies(RGWRados *store, struct req_state *s, bool only_bu
         return -ERR_PERMANENT_REDIRECT;
       }
     }
+#endif
   }
 
   /* we're passed only_bucket = true when we specifically need the bucket's
@@ -423,7 +426,7 @@ void RGWListBucket::execute()
   if (ret < 0)
     return;
 
-  if (need_container_stats()) {
+  if (need_container_stats()) {//just swift need
     map<string, RGWBucketEnt> m;
     m[s->bucket.name] = RGWBucketEnt();
     m.begin()->second.bucket = s->bucket;
@@ -432,7 +435,10 @@ void RGWListBucket::execute()
       bucket = m.begin()->second;
     }
   }
+#if 0  // is ok
   RGWObjEnt ent;
+  rgw_obj_key aaa("helloo.txt");
+  ent.key =  aaa;
   ent.ns = "ns"; 
   ent.owner = "hwttt";
   ent.size = 10000;
@@ -444,9 +450,10 @@ void RGWListBucket::execute()
   ent.owner = "aaaaaas";
   ent.size = 100;
   objs.push_back(ent);
-//  RGWRados::Bucket target(store, s->bucket);
-//  RGWRados::Bucket::List list_op(&target);
-#if 0
+#endif
+  RGWRados::Bucket target(store, s->bucket);
+  RGWRados::Bucket::List list_op(&target);
+#if 1
   list_op.params.prefix = prefix;
   list_op.params.delim = delimiter;
   list_op.params.marker = marker;

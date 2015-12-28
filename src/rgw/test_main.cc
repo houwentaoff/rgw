@@ -48,6 +48,7 @@
 #include "porting_rest_s3.h"
 #include "porting_rest_admin.h"
 #include "porting_common.h"
+#include "porting_user.h"
 
 #include <map>
 #include <string>
@@ -557,7 +558,7 @@ static int process_request(RGWRados *store, RGWREST *rest, RGWRequest *req, RGWC
   int init_error = 0;
   bool should_log = false;
   RGWRESTMgr *mgr;
-  RGWHandler *handler = rest->get_handler(store, s, client_io, &mgr, &init_error);
+  RGWHandler *handler = rest->get_handler(store, s, client_io, &mgr, &init_error);//after this : s->bucket ==""??
   if (init_error != 0) {
     abort_early(s, NULL, init_error);
     goto done;
@@ -667,6 +668,7 @@ int main ( int argc, char *argv[] )
     G.hostname                      = shell_execute("hostname");
     G.rgw_thread_pool_size          = 1;
     G.rgw_list_buckets_max_chunk    = 1000;
+    G.buckets_root                  = "/fisamba";
     
     ldout(0, 0)<<"hello world\n"<<dendl;
 //    check_curl();    
@@ -674,7 +676,11 @@ int main ( int argc, char *argv[] )
   
     FCGX_Init();    
     int r = 0;
-    RGWRados *store ;    
+    RGWRados *store = new RGWRados;    
+//    rgw_user_init(store);
+//    rgw_bucket_init(store->meta_mgr);
+//    rgw_log_usage_init(g_ceph_context, store);
+    
     RGWREST rest;
     rest.register_default_mgr(set_logging(new RGWRESTMgr_S3));
     //admin

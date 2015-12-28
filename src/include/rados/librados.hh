@@ -68,5 +68,35 @@ namespace librados
         ObjectReadOperation() {}
         ~ObjectReadOperation() {}
   };
+  /* IoCtx : This is a context in which we can perform I/O.
+   * It includes a Pool,
+   *
+   * Typical use (error checking omitted):
+   *
+   * IoCtx p;
+   * rados.ioctx_create("my_pool", p);
+   * p->stat(&stats);
+   * ... etc ...
+   *
+   * NOTE: be sure to call watch_flush() prior to destroying any IoCtx
+   * that is used for watch events to ensure that racing callbacks
+   * have completed.
+   */
+  class CEPH_RADOS_API IoCtx
+  {
+  public:
+    IoCtx(){};
+//    static void from_rados_ioctx_t(rados_ioctx_t p, IoCtx &pool){};
+    IoCtx(const IoCtx& rhs){};
+    IoCtx& operator=(const IoCtx& rhs);
+
+    ~IoCtx(){};
+
+    // Close our pool handle
+    void close(){};
+
+    // deep copy
+    void dup(const IoCtx& rhs){};
+  };  
 }
 #endif

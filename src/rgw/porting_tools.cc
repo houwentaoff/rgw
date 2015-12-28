@@ -66,20 +66,20 @@ int rgw_get_system_obj(RGWRados *rgwstore, RGWObjectCtx& obj_ctx, rgw_bucket& bu
   rgw_obj obj(bucket, key);
 
   do {
-//    RGWRados::SystemObject source(rgwstore, obj_ctx, obj);
-//    RGWRados::SystemObject::Read rop(&source);
-//
-//    rop.stat_params.attrs = pattrs;
-//    rop.stat_params.lastmod = pmtime;
-//    rop.stat_params.perr = &err;
+    RGWRados::SystemObject source(rgwstore, obj_ctx, obj);
+    RGWRados::SystemObject::Read rop(&source);
 
-    int ret = 0;//rop.stat(objv_tracker);
+    rop.stat_params.attrs = pattrs;
+    rop.stat_params.lastmod = pmtime;
+    rop.stat_params.perr = &err;
+
+    int ret = rop.stat(objv_tracker);
     if (ret < 0)
       return ret;
 
-//    rop.read_params.cache_info = cache_info;
+    rop.read_params.cache_info = cache_info;
 
-//    ret = rop.read(0, request_len - 1, bl, objv_tracker);
+    ret = rop.read(0, request_len - 1, bl, objv_tracker);
     if (ret == -ECANCELED) {
       /* raced, restart */
       continue;

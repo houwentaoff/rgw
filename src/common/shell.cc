@@ -42,3 +42,21 @@ string shell_execute(const char * cmd)
 err:
     return string(ret);
 }
+
+int shell_simple(const char *cmd)
+{
+    FILE *fp = NULL;
+    int ret  = -1;
+
+    if (NULL == (fp = popen(cmd, "r")))
+    {
+        printf("popen fail\n");
+        ret = -2;
+        goto err;
+    }
+    ret = pclose(fp);
+
+    return ret;
+err:
+    return ret;
+}
