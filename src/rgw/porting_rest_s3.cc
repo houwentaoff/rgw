@@ -206,8 +206,8 @@ RGWOp *RGWHandler_ObjStore_Obj_S3::get_obj_op(bool get_data)
   if (is_acl_op()) {
     return NULL;//new RGWGetACLs_ObjStore_S3;
   }
-//  RGWGetObj_ObjStore_S3 *get_obj_op = NULL;//new RGWGetObj_ObjStore_S3;
-//  get_obj_op->set_get_data(get_data);
+  //RGWGetObj_ObjStore_S3 *get_obj_op = new RGWGetObj_ObjStore_S3;
+  //get_obj_op->set_get_data(get_data);
   return NULL;//get_obj_op;
 }
 RGWOp *RGWHandler_ObjStore_Obj_S3::op_get()

@@ -681,7 +681,8 @@ int RGWRados::get_bucket_instance_from_oid(RGWObjectCtx& obj_ctx, string& oid, R
   }
   info.bucket.name      = bucket_name;
   info.bucket.oid       = oid;
-  info.bucket.bucket_id = bucket_id;
+  info.bucket.bucket_id = bucket_name;//bucket_id;
+  info.bucket.marker    = info.bucket.bucket_id;
   info.encode(epbl);//add by sean
  /* :TODO:End---  */
   bufferlist::iterator iter = epbl.begin();

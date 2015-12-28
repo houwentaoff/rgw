@@ -41,6 +41,18 @@ struct RGWObjectCtx {
   void invalidate(rgw_obj& obj);
 };
 
+class RGWGetDataCB {
+protected:
+  uint64_t extra_data_len;
+public:
+  virtual int handle_data(bufferlist& bl, off_t bl_ofs, off_t bl_len) = 0;
+  RGWGetDataCB() : extra_data_len(0) {}
+  virtual ~RGWGetDataCB() {}
+  virtual void set_extra_data_len(uint64_t len) {
+    extra_data_len = len;
+  }
+};
+
 class RGWRados
 {
     public:

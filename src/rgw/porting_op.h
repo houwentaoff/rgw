@@ -213,4 +213,76 @@ public:
   virtual bool need_container_stats() { return false; }//just swift need
 };
 
+class RGWGetObj : public RGWOp {
+protected:
+  const char *range_str;
+  const char *if_mod;
+  const char *if_unmod;
+  const char *if_match;
+  const char *if_nomatch;
+  off_t ofs;
+  uint64_t total_len;
+  off_t start;
+  off_t end;
+  time_t mod_time;
+  time_t lastmod;
+  time_t unmod_time;
+  time_t *mod_ptr;
+  time_t *unmod_ptr;
+  map<string, bufferlist> attrs;
+  int ret;
+  bool get_data;
+  bool partial_content;
+  bool range_parsed;
+  bool skip_manifest;
+  rgw_obj obj;
+  utime_t gc_invalidate_time;
+
+  int init_common();
+public:
+  RGWGetObj() {
+    range_str = NULL;
+    if_mod = NULL;
+    if_unmod = NULL;
+    if_match = NULL;
+    if_nomatch = NULL;
+    start = 0;
+    ofs = 0;
+    total_len = 0;
+    end = -1;
+    mod_time = 0;
+    lastmod = 0;
+    unmod_time = 0;
+    mod_ptr = NULL;
+    unmod_ptr = NULL;
+    get_data = false;
+    partial_content = false;
+    range_parsed = false;
+    skip_manifest = false;
+    ret = 0;
+ }
+
+  bool prefetch_data();
+
+  void set_get_data(bool get_data) {
+    this->get_data = get_data;
+  }
+  int verify_permission(){};
+  void pre_exec();
+  void execute();
+  int read_user_manifest_part(rgw_bucket& bucket, RGWObjEnt& ent, RGWAccessControlPolicy *bucket_policy, off_t start_ofs, off_t end_ofs);
+  int handle_user_manifest(const char *prefix);
+
+  int get_data_cb(bufferlist& bl, off_t ofs, off_t len);
+
+  virtual int get_params() = 0;
+  virtual int send_response_data_error() = 0;
+  virtual int send_response_data(bufferlist& bl, off_t ofs, off_t len) = 0;
+
+  virtual const string name() { return "get_obj"; }
+  virtual RGWOpType get_type() { return RGW_OP_GET_OBJ; }
+  virtual uint32_t op_mask() { return RGW_OP_TYPE_READ; }
+  virtual bool need_object_expiration() { return false; }
+};
+
 #endif

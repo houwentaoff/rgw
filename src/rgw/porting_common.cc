@@ -436,3 +436,70 @@ void url_encode(const string& src, string& dst)
     dst.append(p, 1);
   }
 }
+static bool check_gmt_end(const char *s)
+{
+  if (!s || !*s)
+    return false;
+
+  while (isspace(*s)) {
+    ++s;
+  }
+
+  /* check for correct timezone */
+  if ((strncmp(s, "GMT", 3) != 0) &&
+      (strncmp(s, "UTC", 3) != 0)) {
+    return false;
+  }
+
+  return true;
+}
+static bool parse_rfc850(const char *s, struct tm *t)
+{
+  memset(t, 0, sizeof(*t));
+  return check_gmt_end(strptime(s, "%A, %d-%b-%y %H:%M:%S ", t));
+}
+static bool check_str_end(const char *s)
+{
+  if (!s)
+    return false;
+
+  while (*s) {
+    if (!isspace(*s))
+      return false;
+    s++;
+  }
+  return true;
+}
+static bool parse_asctime(const char *s, struct tm *t)
+{
+  memset(t, 0, sizeof(*t));
+  return check_str_end(strptime(s, "%a %b %d %H:%M:%S %Y", t));
+}
+static bool parse_rfc1123(const char *s, struct tm *t)
+{
+  memset(t, 0, sizeof(*t));
+  return check_gmt_end(strptime(s, "%a, %d %b %Y %H:%M:%S ", t));
+}
+
+static bool parse_rfc1123_alt(const char *s, struct tm *t)
+{
+  memset(t, 0, sizeof(*t));
+  return check_str_end(strptime(s, "%a, %d %b %Y %H:%M:%S %z", t));
+}
+
+bool parse_rfc2616(const char *s, struct tm *t)
+{
+  return parse_rfc850(s, t) || parse_asctime(s, t) || parse_rfc1123(s, t) || parse_rfc1123_alt(s,t);
+}
+
+int parse_time(const char *time_str, time_t *time)
+{
+  struct tm tm;
+
+  if (!parse_rfc2616(time_str, &tm))
+    return -EINVAL;
+
+  *time = timegm(&tm);
+
+  return 0;
+}

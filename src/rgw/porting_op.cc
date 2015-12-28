@@ -22,6 +22,62 @@
 #include "porting_rados.h"
 #include "global/global.h"
 
+static int parse_range(const char *range, off_t& ofs, off_t& end, bool *partial_content)
+{
+  int r = -ERANGE;
+  string s(range);
+  string ofs_str;
+  string end_str;
+
+  *partial_content = false;
+
+  int pos = s.find("bytes=");
+  if (pos < 0) {
+    pos = 0;
+    while (isspace(s[pos]))
+      pos++;
+    int end = pos;
+    while (isalpha(s[end]))
+      end++;
+    if (strncasecmp(s.c_str(), "bytes", end - pos) != 0)
+      return 0;
+    while (isspace(s[end]))
+      end++;
+    if (s[end] != '=')
+      return 0;
+    s = s.substr(end + 1);
+  } else {
+    s = s.substr(pos + 6); /* size of("bytes=")  */
+  }
+  pos = s.find('-');
+  if (pos < 0)
+    goto done;
+
+  *partial_content = true;
+
+  ofs_str = s.substr(0, pos);
+  end_str = s.substr(pos + 1);
+  if (end_str.length()) {
+    end = atoll(end_str.c_str());
+    if (end < 0)
+      goto done;
+  }
+
+  if (ofs_str.length()) {
+    ofs = atoll(ofs_str.c_str());
+  } else { // RFC2616 suffix-byte-range-spec
+    ofs = -end;
+    end = -1;
+  }
+
+  if (end >= 0 && end < ofs)
+    goto done;
+
+  r = 0;
+done:
+  return r;
+}
+
 int RGWOp::verify_op_mask()
 {
   uint32_t required_mask = op_mask();
@@ -520,6 +576,157 @@ bool RGWOp::generate_cors_headers(string& origin, string& method, string& header
   return true;
 }
 
+class RGWGetObj_CB : public RGWGetDataCB
+{
+  RGWGetObj *op;
+public:
+  RGWGetObj_CB(RGWGetObj *_op) : op(_op) {}
+  virtual ~RGWGetObj_CB() {}
+
+  int handle_data(bufferlist& bl, off_t bl_ofs, off_t bl_len) {
+//    return op->get_data_cb(bl, bl_ofs, bl_len);
+  }
+};
+
+int RGWGetObj::init_common()
+{
+  if (range_str) {
+    /* range parsed error when prefetch*/
+    if (!range_parsed) {
+      int r = parse_range(range_str, ofs, end, &partial_content);
+      if (r < 0)
+        return r;
+    }
+  }
+  if (if_mod) {
+    if (parse_time(if_mod, &mod_time) < 0)
+      return -EINVAL;
+    mod_ptr = &mod_time;
+  }
+
+  if (if_unmod) {
+    if (parse_time(if_unmod, &unmod_time) < 0)
+      return -EINVAL;
+    unmod_ptr = &unmod_time;
+  }
+
+  return 0;
+}
+
+bool RGWGetObj::prefetch_data()
+{
+  /* HEAD request, stop prefetch*/
+  if (!get_data) {
+    return false;
+  }
+
+  bool prefetch_first_chunk = true;
+  range_str = s->info.env->get("HTTP_RANGE");
+
+  if(range_str) {
+    int r = parse_range(range_str, ofs, end, &partial_content);
+    /* error on parsing the range, stop prefetch and will fail in execte() */
+    if (r < 0) {
+      range_parsed = false;
+      return false;
+    } else {
+      range_parsed = true;
+    }
+    /* range get goes to shadown objects, stop prefetch */
+//    if (ofs >= s->cct->_conf->rgw_max_chunk_size) {
+//      prefetch_first_chunk = false;
+//    }
+  }
+
+  return get_data && prefetch_first_chunk;
+}
+void RGWGetObj::pre_exec()
+{
+  rgw_bucket_object_pre_exec(s);
+}
+
+void RGWGetObj::execute()
+{
+  utime_t start_time = s->time;
+  bufferlist bl;
+//  gc_invalidate_time = ceph_clock_now(s->cct);
+  gc_invalidate_time += 10;//(s->cct->_conf->rgw_gc_obj_min_wait / 2);
+
+  RGWGetObj_CB cb(this);
+
+  map<string, bufferlist>::iterator attr_iter;
+
+//  perfcounter->inc(l_rgw_get);
+  int64_t new_ofs, new_end;
+
+  RGWRados::Object op_target(store, s->bucket_info, *static_cast<RGWObjectCtx *>(s->obj_ctx), obj);
+  RGWRados::Object::Read read_op(&op_target);
+
+  ret = get_params();
+  if (ret < 0)
+    goto done_err;
+
+  ret = init_common();
+  if (ret < 0)
+    goto done_err;
+
+  new_ofs = ofs;
+  new_end = end;
+
+  read_op.conds.mod_ptr = mod_ptr;
+  read_op.conds.unmod_ptr = unmod_ptr;
+  read_op.conds.if_match = if_match;
+  read_op.conds.if_nomatch = if_nomatch;
+  read_op.params.attrs = &attrs;
+  read_op.params.lastmod = &lastmod;
+  read_op.params.read_size = &total_len;
+  read_op.params.obj_size = &s->obj_size;
+  read_op.params.perr = &s->err;
+
+//  ret = read_op.prepare(&new_ofs, &new_end);
+  if (ret < 0)
+    goto done_err;
+
+  attr_iter = attrs.find(RGW_ATTR_USER_MANIFEST);
+  if (attr_iter != attrs.end() && !skip_manifest) {
+//    ret = handle_user_manifest(attr_iter->second.c_str());
+    if (ret < 0) {
+      ldout(s->cct, 0) << "ERROR: failed to handle user manifest ret=" << ret << dendl;
+    }
+    return;
+  }
+
+  /* Check whether the object has expired. Swift API documentation
+   * stands that we should return 404 Not Found in such case. */
+//  if (need_object_expiration() && object_is_expired(attrs)) {
+//    ret = -ENOENT;
+//    goto done_err;
+//  }
+
+  ofs = new_ofs;
+  end = new_end;
+
+  start = ofs;
+
+  if (!get_data || ofs > end)
+    goto done_err;
+
+//  perfcounter->inc(l_rgw_get_b, end - ofs);
+
+//  ret = read_op.iterate(ofs, end, &cb);
+
+//  perfcounter->tinc(l_rgw_get_lat,
+//                   (ceph_clock_now(s->cct) - start_time));
+  if (ret < 0) {
+    goto done_err;
+  }
+
+  send_response_data(bl, 0, 0);
+  return;
+
+done_err:
+  send_response_data_error();
+}
 
 
 
