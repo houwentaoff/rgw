@@ -31,6 +31,7 @@
 #include "porting_common.h"
 #include "porting_rest.h"
 #include "porting_rados.h"
+#include "include/rados/librados.hh"
 #include "global/global.h"
 
 static int parse_range(const char *range, off_t& ofs, off_t& end, bool *partial_content)
@@ -677,6 +678,11 @@ void RGWGetObj::pre_exec()
 
 void RGWGetObj::execute()
 {
+  uint64_t lenaa = 0;                   
+  string full_path="";  
+  struct stat st;
+  librados::ObjectReadOperation test;  
+    
   utime_t start_time = s->time;
   bufferlist bl;
   gc_invalidate_time = ceph_clock_now(s->cct);
@@ -703,6 +709,9 @@ void RGWGetObj::execute()
   new_ofs = ofs;
   new_end = end;
 
+  full_path += string("/fisamba/") + s->bucket.name +string("/") + s->object.name;
+  ::stat(full_path.c_str(), &st);
+
   read_op.conds.mod_ptr = mod_ptr;
   read_op.conds.unmod_ptr = unmod_ptr;
   read_op.conds.if_match = if_match;
@@ -713,12 +722,16 @@ void RGWGetObj::execute()
   read_op.params.obj_size = &s->obj_size;
   read_op.params.perr = &s->err;
 
-  ret = read_op.prepare(&new_ofs, &new_end);
+  *read_op.params.read_size = st.st_size;
+  *read_op.params.obj_size =  st.st_size;
+#if 0
+//  ret = read_op.prepare(&new_ofs, &new_end);
   if (ret < 0)
     goto done_err;
 
   attr_iter = attrs.find(RGW_ATTR_USER_MANIFEST);
   if (attr_iter != attrs.end() && !skip_manifest) {
+      s->obj_size = total_len;
 //    ret = handle_user_manifest(attr_iter->second.c_str());
     if (ret < 0) {
       ldout(s->cct, 0) << "ERROR: failed to handle user manifest ret=" << ret << dendl;
@@ -743,15 +756,26 @@ void RGWGetObj::execute()
 
 //  perfcounter->inc(l_rgw_get_b, end - ofs);
 
-//  ret = read_op.iterate(ofs, end, &cb);
+  ret = read_op.iterate(ofs, end, &cb);
 
 //  perfcounter->tinc(l_rgw_get_lat,
 //                   (ceph_clock_now(s->cct) - start_time));
+
   if (ret < 0) {
     goto done_err;
   }
+#endif
+ /* :TODO:2015/12/29 17:46:41:hwt:  */
+  lenaa = st.st_size;
+  end = lenaa;
+  new_end = end;
+  test.read(0, lenaa, &bl, NULL);
+//  bl.append("hello this is test", strlen("hello this is test"));
+  send_response_data(bl, 0, bl.length());
+  bl.clear();
+ /* :TODO:End---  */
 
-  send_response_data(bl, 0, 0);
+  send_response_data(bl, 0, /*sizeof("abcdefgaaaa")*/0);
   return;
 
 done_err:
@@ -760,12 +784,12 @@ done_err:
 
 int RGWGetObj::verify_permission()
 {
-#if 0
+
   obj = rgw_obj(s->bucket, s->object);
   store->set_atomic(s->obj_ctx, obj);
   if (get_data)
     store->set_prefetch_data(s->obj_ctx, obj);
-
+#if 0
   if (!verify_object_permission(s, RGW_PERM_READ))
     return -EACCES;
 #endif

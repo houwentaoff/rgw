@@ -18,7 +18,8 @@
 #include "common/Mutex.h"
 #include "common/Cond.h"
 #include "include/atomic.h"
-#include "common/ceph_context.h"
+#include "include/porting.h"
+//#include "common/ceph_context.h"
 
 struct RefCountedObject {
 private:

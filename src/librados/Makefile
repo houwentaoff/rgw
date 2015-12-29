@@ -1,6 +1,6 @@
 ###############################################
 #
-# code/s3/src/common
+# code/s3/src/librados
 #
 # 2015/12/07 - [Sean Hou] created file
 #
@@ -15,7 +15,7 @@
 
 default:all
 
-MODULE_NAME 	:= common
+MODULE_NAME 	:=  rados
 
 MODULE_LIBS 	 =  lib$(MODULE_NAME).a
 
@@ -23,12 +23,7 @@ INCLUDES 		 =  -I../
 
 include ../lib.rules
 
-BASE_OBJS = RefCountedObj.o shell.o escape.o errno.o assert.o signal.o io_priority.o simple_spin.o buffer.o safe_io.o str_list.o ceph_json.o mime.o utf8.o armor.o WorkQueue.o  Thread.o page.o Mutex.o  Formatter.o Clock.o lockdep.o environment.o code_environment.o PrebufferedStreambuf.o strtol.o dout.o BackTrace.o # WorkQueue.o Thread.o Clock.o# entity_name.o ceph_context.o ceph_crypto.o admin_socket.o \
-		   signal.o Thread.o code_environment.o admin_socket_client.o errno.o safe_io.o armor.o Clock.o  \
-		   
-
-LIB_OBJS  =
-LIB_OBJS += $(BASE_OBJS)
+LIB_OBJS = librados.o
 
 MODULE_TARGETS = $(MODULE_LIBS)
 

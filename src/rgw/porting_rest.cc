@@ -22,6 +22,7 @@
 #include "porting_op.h"
 #include "common/utf8.h"
 #include "common/Formatter.h"
+#include "rgw_http_errors.h"
 
 #define CORS_MAX_AGE_INVALID ((uint32_t)-1)
 #define TIME_BUF_SIZE 128
@@ -478,7 +479,6 @@ RGWHandler *RGWREST::get_handler(RGWRados *store, struct req_state *s, RGWClient
 
 void set_req_state_err(struct req_state *s, int err_no)
 {
-#if 0
   const struct rgw_http_errors *r;
 
   if (err_no < 0)
@@ -498,7 +498,7 @@ void set_req_state_err(struct req_state *s, int err_no)
     s->err.s3_code = r->s3_code;
     return;
   }
-#endif
+
   dout(0) << "WARNING: set_req_state_err err_no=" << err_no << " resorting to 500" << dendl;
 
   s->err.http_ret = 500;

@@ -59,7 +59,19 @@ class RGWRados
         RGWRados(){}
         ~RGWRados(){}
     public:
+      int iterate_obj(RGWObjectCtx& ctx, rgw_obj& obj,
+                      off_t ofs, off_t end,
+                      uint64_t max_chunk_size,
+                      int (*iterate_obj_cb)(rgw_obj&, off_t, off_t, off_t, bool, RGWObjState *, void *),
+                      void *arg){};        
+      int flush_read_list(struct get_obj_data *d);      
+      int get_obj_iterate_cb(RGWObjectCtx *ctx, RGWObjState *astate,
+                             rgw_obj& obj,
+                             off_t obj_ofs, off_t read_ofs, off_t len,
+                             bool is_head_obj, void *arg){};
+      
       int get_obj_state(RGWObjectCtx *rctx, rgw_obj& obj, RGWObjState **state, RGWObjVersionTracker *objv_tracker, bool follow_olh);
+
       int get_obj_state_impl(RGWObjectCtx *rctx, rgw_obj& obj, RGWObjState **state, RGWObjVersionTracker *objv_tracker, bool follow_olh);
        
       int cls_user_list_buckets(rgw_obj& obj,
@@ -221,7 +233,7 @@ class RGWRados
 
       int prepare(int64_t *pofs, int64_t *pend);
       int read(int64_t ofs, int64_t end, bufferlist& bl);
-//      int iterate(int64_t ofs, int64_t end, RGWGetDataCB *cb);
+      int iterate(int64_t ofs, int64_t end, RGWGetDataCB *cb);
       int get_attr(const char *name, bufferlist& dest);
     };       
   };      

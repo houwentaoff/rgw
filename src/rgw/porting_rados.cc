@@ -33,6 +33,8 @@ using namespace librados;
 #include "common/dout.h"
 #include "cls/rgw/cls_rgw_ops.h"
 #include "cls/rgw/cls_rgw_client.h"
+#include "include/porting.h"
+#include "common/RefCountedObj.h"
 #include "common/shell.h"
 #include "global/global.h"
 
@@ -273,6 +275,229 @@ int RGWRados::stat_system_obj(RGWObjectCtx& obj_ctx,
     *lastmod = astate->mtime;
 #endif
   return 0;
+}
+struct get_obj_data;
+
+struct get_obj_aio_data {
+  struct get_obj_data *op_data;
+  off_t ofs;
+  off_t len;
+};
+
+struct get_obj_io {
+  off_t len;
+  bufferlist bl;
+};
+
+struct get_obj_data : public RefCountedObject {
+  CephContext *cct;
+  RGWRados *rados;
+  RGWObjectCtx *ctx;
+  IoCtx io_ctx;
+  map<off_t, get_obj_io> io_map;
+  map<off_t, librados::AioCompletion *> completion_map;
+  uint64_t total_read;
+  Mutex lock;
+  Mutex data_lock;
+  list<get_obj_aio_data> aio_data;
+  RGWGetDataCB *client_cb;
+  atomic_t cancelled;
+  atomic_t err_code;
+  Throttle throttle;
+  list<bufferlist> read_list;
+
+  get_obj_data(CephContext *_cct)
+    : cct(_cct),
+      rados(NULL), ctx(NULL),
+      total_read(0), lock("get_obj_data"), data_lock("get_obj_data::data_lock"),
+      client_cb(NULL),
+      throttle(cct, "get_obj_data", 10/* cct->_conf->rgw_get_obj_window_size */, false) {}
+  virtual ~get_obj_data() { } 
+  void set_cancelled(int r) {
+    cancelled.set(1);
+    err_code.set(r);
+  }
+
+  bool is_cancelled() {
+    return cancelled.read() == 1;
+  }
+
+  int get_err_code() {
+    return err_code.read();
+  }
+
+  int wait_next_io(bool *done) {
+    lock.Lock();
+    map<off_t, librados::AioCompletion *>::iterator iter = completion_map.begin();
+    if (iter == completion_map.end()) {
+      *done = true;
+      lock.Unlock();
+      return 0;
+    }
+    off_t cur_ofs = iter->first;
+    librados::AioCompletion *c = iter->second;
+    lock.Unlock();
+
+    c->wait_for_complete_and_cb();
+    int r = c->get_return_value();
+
+    lock.Lock();
+    completion_map.erase(cur_ofs);
+
+    if (completion_map.empty()) {
+      *done = true;
+    }
+    lock.Unlock();
+
+    c->release();
+    
+    return r;
+  }
+
+  void add_io(off_t ofs, off_t len, bufferlist **pbl, AioCompletion **pc) {
+    Mutex::Locker l(lock);
+
+    get_obj_io& io = io_map[ofs];
+    *pbl = &io.bl;
+
+    struct get_obj_aio_data aio;
+    aio.ofs = ofs;
+    aio.len = len;
+    aio.op_data = this;
+
+    aio_data.push_back(aio);
+
+    struct get_obj_aio_data *paio_data =  &aio_data.back(); /* last element */
+
+    librados::AioCompletion *c = NULL;//librados::Rados::aio_create_completion((void *)paio_data, _get_obj_aio_completion_cb, NULL);
+    completion_map[ofs] = c;
+
+    *pc = c;
+
+    /* we have a reference per IO, plus one reference for the calling function.
+     * reference is dropped for each callback, plus when we're done iterating
+     * over the parts */
+    get();
+  }
+
+  void cancel_io(off_t ofs) {
+    ldout(cct, 20) << "get_obj_data::cancel_io() ofs=" << ofs << dendl;
+    lock.Lock();
+    map<off_t, AioCompletion *>::iterator iter = completion_map.find(ofs);
+    if (iter != completion_map.end()) {
+      AioCompletion *c = iter->second;
+      c->release();
+      completion_map.erase(ofs);
+      io_map.erase(ofs);
+    }
+    lock.Unlock();
+
+    /* we don't drop a reference here -- e.g., not calling d->put(), because we still
+     * need IoCtx to live, as io callback may still be called
+     */
+  }
+
+  void cancel_all_io() {
+    ldout(cct, 20) << "get_obj_data::cancel_all_io()" << dendl;
+    Mutex::Locker l(lock);
+    for (map<off_t, librados::AioCompletion *>::iterator iter = completion_map.begin();
+         iter != completion_map.end(); ++iter) {
+      librados::AioCompletion  *c = iter->second;
+      c->release();
+    }
+  }
+
+  int get_complete_ios(off_t ofs, list<bufferlist>& bl_list) {
+    Mutex::Locker l(lock);
+
+    map<off_t, get_obj_io>::iterator liter = io_map.begin();
+
+    if (liter == io_map.end() ||
+        liter->first != ofs) {
+      return 0;
+    }
+
+    map<off_t, librados::AioCompletion *>::iterator aiter;
+    aiter = completion_map.find(ofs);
+    if (aiter == completion_map.end()) {
+    /* completion map does not hold this io, it was cancelled */
+      return 0;
+    }
+
+    AioCompletion *completion = aiter->second;
+    int r = completion->get_return_value();
+    if (r < 0)
+      return r;
+
+    for (; aiter != completion_map.end(); ++aiter) {
+      completion = aiter->second;
+      if (!completion->is_complete()) {
+        /* reached a request that is not yet complete, stop */
+        break;
+      }
+
+      r = completion->get_return_value();
+      if (r < 0) {
+        set_cancelled(r); /* mark it as cancelled, so that we don't continue processing next operations */
+        return r;
+      }
+
+      total_read += r;
+
+      map<off_t, get_obj_io>::iterator old_liter = liter++;
+      bl_list.push_back(old_liter->second.bl);
+      io_map.erase(old_liter);
+    }
+
+    return 0;
+  }
+};
+
+static int _get_obj_iterate_cb(rgw_obj& obj, off_t obj_ofs, off_t read_ofs, off_t len, bool is_head_obj, RGWObjState *astate, void *arg)
+{
+  struct get_obj_data *d = (struct get_obj_data *)arg;
+
+  return d->rados->get_obj_iterate_cb(d->ctx, astate, obj, obj_ofs, read_ofs, len, is_head_obj, arg);
+}
+
+int RGWRados::Object::Read::iterate(int64_t ofs, int64_t end, RGWGetDataCB *cb)
+{
+  RGWRados *store = source->get_store();
+  CephContext *cct = NULL;//store->ctx();
+
+  struct get_obj_data *data = new get_obj_data(cct);
+  bool done = false;
+
+  RGWObjectCtx& obj_ctx = source->get_ctx();
+
+  data->rados = store;
+  data->io_ctx.dup(state.io_ctx);
+  data->client_cb = cb;
+
+  int r = store->iterate_obj(obj_ctx, state.obj, ofs, end, 100/* cct->_conf->rgw_get_obj_max_req_size */, _get_obj_iterate_cb, (void *)data);
+  if (r < 0) {
+    data->cancel_all_io();
+    goto done;
+  }
+
+  while (!done) {
+    r = data->wait_next_io(&done);
+    if (r < 0) {
+      dout(10) << "get_obj_iterate() r=" << r << ", canceling all io" << dendl;
+      data->cancel_all_io();
+      break;
+    }
+    r = store->flush_read_list(data);
+    if (r < 0) {
+      dout(10) << "get_obj_iterate() r=" << r << ", canceling all io" << dendl;
+      data->cancel_all_io();
+      break;
+    }
+  }
+
+done:
+  data->put();
+  return r;
 }
 
 /**
@@ -930,7 +1155,7 @@ int RGWRados::get_obj_state_impl(RGWObjectCtx *rctx, rgw_obj& obj, RGWObjState *
   bool need_follow_olh = follow_olh && !obj.have_instance();
 
   RGWObjState *s = rctx->get_state(obj);
-  ldout(cct, 20) << "get_obj_state: rctx=" << (void *)rctx << " obj=" << obj << " state=" << (void *)s << " s->prefetch_data=" << s->prefetch_data << dendl;
+//  ldout(cct, 20) << "get_obj_state: rctx=" << (void *)rctx << " obj=" << obj << " state=" << (void *)s << " s->prefetch_data=" << s->prefetch_data << dendl;
   *state = s;
   if (s->has_attrs) {
     if (s->is_olh && need_follow_olh) {
@@ -1082,4 +1307,34 @@ int RGWRados::Object::Read::get_attr(const char *name, bufferlist& dest)
   return 0;
 }
 
+int RGWRados::flush_read_list(struct get_obj_data *d)
+{
+  d->data_lock.Lock();
+  list<bufferlist> l;
+  l.swap(d->read_list);
+  d->get();
+  d->read_list.clear();
+
+  d->data_lock.Unlock();
+
+  int r = 0;
+
+  list<bufferlist>::iterator iter;
+  for (iter = l.begin(); iter != l.end(); ++iter) {
+    bufferlist& bl = *iter;
+    r = d->client_cb->handle_data(bl, 0, bl.length());
+    if (r < 0) {
+      dout(0) << "ERROR: flush_read_list(): d->client_c->handle_data() returned " << r << dendl;
+      break;
+    }
+  }
+
+  d->data_lock.Lock();
+  d->put();
+  if (r < 0) {
+    d->set_cancelled(r);
+  }
+  d->data_lock.Unlock();
+  return r;
+}
 

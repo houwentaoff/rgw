@@ -67,10 +67,10 @@ namespace librados
     public:
         ObjectReadOperation() {}
         ~ObjectReadOperation() {}
-    void stat(uint64_t *psize, time_t *pmtime, int *prval){};
+    void stat(uint64_t *psize, time_t *pmtime, int *prval);
     void getxattr(const char *name, bufferlist *pbl, int *prval){};
     void getxattrs(std::map<std::string, bufferlist> *pattrs, int *prval){};
-    void read(size_t off, uint64_t len, bufferlist *pbl, int *prval){};
+    void read(size_t off, uint64_t len, bufferlist *pbl, int *prval);
   };
   /* IoCtx : This is a context in which we can perform I/O.
    * It includes a Pool,
@@ -101,6 +101,27 @@ namespace librados
 
     // deep copy
     void dup(const IoCtx& rhs){};
+  };  
+  typedef void *completion_t;
+  typedef void (*callback_t)(completion_t cb, void *arg);
+
+  struct CEPH_RADOS_API AioCompletion {
+//    AioCompletion(AioCompletionImpl *pc_) : pc(pc_) {}
+    int set_complete_callback(void *cb_arg, callback_t cb){};
+    int set_safe_callback(void *cb_arg, callback_t cb){};
+    int wait_for_complete(){};
+    int wait_for_safe(){};
+    int wait_for_complete_and_cb(){};
+    int wait_for_safe_and_cb(){};
+    bool is_complete(){};
+    bool is_safe(){};
+    bool is_complete_and_cb(){};
+    bool is_safe_and_cb(){};
+    int get_return_value(){};
+    int get_version() __attribute__ ((deprecated)){};
+    uint64_t get_version64(){};
+    void release(){};
+//    AioCompletionImpl *pc;
   };  
 }
 #endif

@@ -4,7 +4,7 @@
 #ifndef RGW_HTTP_ERRORS_H_
 #define RGW_HTTP_ERRORS_H_
 
-#include "rgw_common.h"
+#include "porting_common.h"
 
 struct rgw_http_errors {
   int err_no;
