@@ -267,7 +267,7 @@ public:
   void set_get_data(bool get_data) {
     this->get_data = get_data;
   }
-  int verify_permission(){};
+  int verify_permission();
   void pre_exec();
   void execute();
   int read_user_manifest_part(rgw_bucket& bucket, RGWObjEnt& ent, RGWAccessControlPolicy *bucket_policy, off_t start_ofs, off_t end_ofs);

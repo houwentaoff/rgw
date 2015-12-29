@@ -23,6 +23,16 @@
 #include "porting_rest.h"
 #include "porting_op.h"
 
+class RGWGetObj_ObjStore_S3 : public RGWGetObj_ObjStore
+{
+public:
+  RGWGetObj_ObjStore_S3() {}
+  ~RGWGetObj_ObjStore_S3() {}
+
+  int send_response_data_error();
+  int send_response_data(bufferlist& bl, off_t ofs, off_t len);
+};
+
 class RGW_Auth_S3 {
 public:
   static int authorize(RGWRados *store, struct req_state *s);

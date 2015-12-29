@@ -27,6 +27,8 @@
 #include "porting_rados.h"
 #include "cls/user/cls_user_client.h"
 #include "include/rados/librados.hh"
+using namespace librados;
+
 #include "porting_tools.h"
 #include "common/dout.h"
 #include "cls/rgw/cls_rgw_ops.h"
@@ -55,6 +57,19 @@ struct bucket_info_entry {
   time_t mtime;
   map<string, bufferlist> attrs;
 };
+
+static void filter_attrset(map<string, bufferlist>& unfiltered_attrset, const string& check_prefix,
+                           map<string, bufferlist> *attrset)
+{
+  attrset->clear();
+  map<string, bufferlist>::iterator iter;
+  for (iter = unfiltered_attrset.lower_bound(check_prefix);
+       iter != unfiltered_attrset.end(); ++iter) {
+    if (!str_startswith(iter->first, check_prefix))
+      break;
+    (*attrset)[iter->first] = iter->second;
+  }
+}
 
 int RGWRados::cls_user_list_buckets(rgw_obj& obj,
                                     const string& in_marker, int max_entries,
@@ -750,4 +765,321 @@ void RGWRados::get_bucket_meta_oid(rgw_bucket& bucket, string& oid)
   get_bucket_instance_entry(bucket, entry);
   oid = RGW_BUCKET_INSTANCE_MD_PREFIX + entry;
 }
+
+/**
+ * Get data about an object out of RADOS and into memory.
+ * bucket: name of the bucket the object is in.
+ * obj: name/key of the object to read
+ * data: if get_data==true, this pointer will be set
+ *    to an address containing the object's data/value
+ * ofs: the offset of the object to read from
+ * end: the point in the object to stop reading
+ * attrs: if non-NULL, the pointed-to map will contain
+ *    all the attrs of the object when this function returns
+ * mod_ptr: if non-NULL, compares the object's mtime to *mod_ptr,
+ *    and if mtime is smaller it fails.
+ * unmod_ptr: if non-NULL, compares the object's mtime to *unmod_ptr,
+ *    and if mtime is >= it fails.
+ * if_match/nomatch: if non-NULL, compares the object's etag attr
+ *    to the string and, if it doesn't/does match, fails out.
+ * get_data: if true, the object's data/value will be read out, otherwise not
+ * err: Many errors will result in this structure being filled
+ *    with extra informatin on the error.
+ * Returns: -ERR# on failure, otherwise
+ *          (if get_data==true) length of read data,
+ *          (if get_data==false) length of the object
+ */
+int RGWRados::Object::Read::prepare(int64_t *pofs, int64_t *pend)
+{
+  RGWRados *store = source->get_store();
+  CephContext *cct = NULL;//store->ctx();
+
+  bufferlist etag;
+
+  off_t ofs = 0;
+  off_t end = -1;
+
+  map<string, bufferlist>::iterator iter;
+
+  RGWObjState *astate;
+  int r = source->get_state(&astate, true);
+  if (r < 0)
+    return r;
+
+  if (!astate->exists) {
+    return -ENOENT;
+  }
+
+  state.obj = astate->obj;
+
+  r = 0;//store->get_obj_ioctx(state.obj, &state.io_ctx);
+  if (r < 0) {
+    return r;
+  }
+
+  if (params.attrs) {
+    *params.attrs = astate->attrset;
+//    if (cct->_conf->subsys.should_gather(ceph_subsys_rgw, 20)) {
+//      for (iter = params.attrs->begin(); iter != params.attrs->end(); ++iter) {
+//        ldout(cct, 20) << "Read xattr: " << iter->first << dendl;
+//      }
+//    }
+  }
+
+  /* Convert all times go GMT to make them compatible */
+  if (conds.mod_ptr || conds.unmod_ptr) {
+    time_t ctime = astate->mtime;
+
+    if (conds.mod_ptr) {
+      ldout(cct, 10) << "If-Modified-Since: " << *conds.mod_ptr << " Last-Modified: " << ctime << dendl;
+      if (ctime < *conds.mod_ptr) {
+        return -ERR_NOT_MODIFIED;
+      }
+    }
+
+    if (conds.unmod_ptr) {
+      ldout(cct, 10) << "If-UnModified-Since: " << *conds.unmod_ptr << " Last-Modified: " << ctime << dendl;
+      if (ctime > *conds.unmod_ptr) {
+        return -ERR_PRECONDITION_FAILED;
+      }
+    }
+  }
+  if (conds.if_match || conds.if_nomatch) {
+    r = get_attr(RGW_ATTR_ETAG, etag);
+    if (r < 0)
+      return r;
+
+    if (conds.if_match) {
+      string if_match_str = rgw_string_unquote(conds.if_match);
+      ldout(cct, 10) << "ETag: " << etag.c_str() << " " << " If-Match: " << if_match_str << dendl;
+      if (if_match_str.compare(etag.c_str()) != 0) {
+        return -ERR_PRECONDITION_FAILED;
+      }
+    }
+
+    if (conds.if_nomatch) {
+      string if_nomatch_str = rgw_string_unquote(conds.if_nomatch);
+      ldout(cct, 10) << "ETag: " << etag.c_str() << " " << " If-NoMatch: " << if_nomatch_str << dendl;
+      if (if_nomatch_str.compare(etag.c_str()) == 0) {
+        return -ERR_NOT_MODIFIED;
+      }
+    }
+  }
+
+  if (pofs)
+    ofs = *pofs;
+  if (pend)
+    end = *pend;
+
+  if (ofs < 0) {
+    ofs += astate->size;
+    if (ofs < 0)
+      ofs = 0;
+    end = astate->size - 1;
+  } else if (end < 0) {
+    end = astate->size - 1;
+  }
+
+  if (astate->size > 0) {
+    if (ofs >= (off_t)astate->size) {
+      return -ERANGE;
+    }
+    if (end >= (off_t)astate->size) {
+      end = astate->size - 1;
+    }
+  }
+
+  if (pofs)
+    *pofs = ofs;
+  if (pend)
+    *pend = end;
+  if (params.read_size)
+    *params.read_size = (ofs <= end ? end + 1 - ofs : 0);
+  if (params.obj_size)
+    *params.obj_size = astate->size;
+  if (params.lastmod)
+    *params.lastmod = astate->mtime;
+
+  return 0;
+}
+
+int RGWRados::Object::get_state(RGWObjState **pstate, bool follow_olh)
+{
+  return store->get_obj_state(&ctx, obj, pstate, NULL, follow_olh);
+}
+
+int RGWRados::get_obj_state(RGWObjectCtx *rctx, rgw_obj& obj, RGWObjState **state, RGWObjVersionTracker *objv_tracker, bool follow_olh)
+{
+  int ret;
+
+  do {
+    ret = get_obj_state_impl(rctx, obj, state, objv_tracker, follow_olh);
+  } while (ret == -EAGAIN);
+
+  return ret;
+}
+
+static bool is_olh(map<string, bufferlist>& attrs)
+{
+  map<string, bufferlist>::iterator iter = attrs.find(RGW_ATTR_OLH_INFO);
+  return (iter != attrs.end());
+}
+
+int RGWRados::get_obj_state_impl(RGWObjectCtx *rctx, rgw_obj& obj, RGWObjState **state, RGWObjVersionTracker *objv_tracker, bool follow_olh)
+{
+  bool need_follow_olh = follow_olh && !obj.have_instance();
+
+  RGWObjState *s = rctx->get_state(obj);
+  ldout(cct, 20) << "get_obj_state: rctx=" << (void *)rctx << " obj=" << obj << " state=" << (void *)s << " s->prefetch_data=" << s->prefetch_data << dendl;
+  *state = s;
+  if (s->has_attrs) {
+    if (s->is_olh && need_follow_olh) {
+      return 0;//get_olh_target_state(*rctx, obj, s, state, objv_tracker);
+    }
+    return 0;
+  }
+
+  s->obj = obj;
+
+  int r = raw_obj_stat(obj, &s->size, &s->mtime, &s->epoch, &s->attrset, (s->prefetch_data ? &s->data : NULL), objv_tracker);
+  if (r == -ENOENT) {
+    s->exists = false;
+    s->has_attrs = true;
+    s->mtime = 0;
+    return 0;
+  }
+  if (r < 0)
+    return r;
+
+  s->exists = true;
+  s->has_attrs = true;
+
+  map<string, bufferlist>::iterator iter = s->attrset.find(RGW_ATTR_SHADOW_OBJ);
+  if (iter != s->attrset.end()) {
+    bufferlist bl = iter->second;
+    bufferlist::iterator it = bl.begin();
+    it.copy(bl.length(), s->shadow_obj);
+    s->shadow_obj[bl.length()] = '\0';
+  }
+  s->obj_tag = s->attrset[RGW_ATTR_ID_TAG];
+#if 0
+  bufferlist manifest_bl = s->attrset[RGW_ATTR_MANIFEST];
+  if (manifest_bl.length()) {
+    bufferlist::iterator miter = manifest_bl.begin();
+    try {
+      ::decode(s->manifest, miter);
+      s->has_manifest = true;
+      s->size = s->manifest.get_obj_size();
+    } catch (buffer::error& err) {
+      ldout(cct, 20) << "ERROR: couldn't decode manifest" << dendl;
+      return -EIO;
+    }
+    ldout(cct, 10) << "manifest: total_size = " << s->manifest.get_obj_size() << dendl;
+    if (cct->_conf->subsys.should_gather(ceph_subsys_rgw, 20) && s->manifest.has_explicit_objs()) {
+      RGWObjManifest::obj_iterator mi;
+      for (mi = s->manifest.obj_begin(); mi != s->manifest.obj_end(); ++mi) {
+        ldout(cct, 20) << "manifest: ofs=" << mi.get_ofs() << " loc=" << mi.get_location() << dendl;
+      }
+    }
+
+    if (!s->obj_tag.length()) {
+      /*
+       * Uh oh, something's wrong, object with manifest should have tag. Let's
+       * create one out of the manifest, would be unique
+       */
+      generate_fake_tag(cct, s->attrset, s->manifest, manifest_bl, s->obj_tag);
+      s->fake_tag = true;
+    }
+  }
+#endif
+  if (s->obj_tag.length())
+    ldout(cct, 20) << "get_obj_state: setting s->obj_tag to " << string(s->obj_tag.c_str(), s->obj_tag.length()) << dendl;
+  else
+    ldout(cct, 20) << "get_obj_state: s->obj_tag was set empty" << dendl;
+
+  /* an object might not be olh yet, but could have olh id tag, so we should set it anyway if
+   * it exist, and not only if is_olh() returns true
+   */
+  iter = s->attrset.find(RGW_ATTR_OLH_ID_TAG);
+  if (iter != s->attrset.end()) {
+    s->olh_tag = iter->second;
+  }
+
+  if (is_olh(s->attrset)) {
+    s->is_olh = true;
+
+    ldout(cct, 20) << __func__ << ": setting s->olh_tag to " << string(s->olh_tag.c_str(), s->olh_tag.length()) << dendl;
+
+    if (need_follow_olh) {
+      return 0;//get_olh_target_state(*rctx, obj, s, state, objv_tracker);
+    }
+  }
+
+  return 0;
+}
+
+
+int RGWRados::raw_obj_stat(rgw_obj& obj, uint64_t *psize, time_t *pmtime, uint64_t *epoch,
+                           map<string, bufferlist> *attrs, bufferlist *first_chunk,
+                           RGWObjVersionTracker *objv_tracker)
+{
+  rgw_rados_ref ref;
+  rgw_bucket bucket;
+  int r = 0;//get_obj_ref(obj, &ref, &bucket);
+  if (r < 0) {
+    return r;
+  }
+
+  map<string, bufferlist> unfiltered_attrset;
+  uint64_t size = 0;
+  time_t mtime = 0;
+
+  ObjectReadOperation op;
+  if (objv_tracker) {
+//    objv_tracker->prepare_op_for_read(&op);
+  }
+  if (attrs) {
+    op.getxattrs(&unfiltered_attrset, NULL);
+  }
+  if (psize || pmtime) {
+    op.stat(&size, &mtime, NULL);
+  }
+  if (first_chunk) {
+    op.read(0, 100/* cct->_conf->rgw_max_chunk_size */, first_chunk, NULL);
+  }
+  bufferlist outbl;
+  r = 0;//ref.ioctx.operate(ref.oid, &op, &outbl);
+
+  if (epoch) {
+//    *epoch = ref.ioctx.get_last_version();
+  }
+
+  if (r < 0)
+    return r;
+
+  if (psize)
+    *psize = size;
+  if (pmtime)
+    *pmtime = mtime;
+  if (attrs) {
+    filter_attrset(unfiltered_attrset, RGW_ATTR_PREFIX, attrs);
+  }
+
+  return 0;
+}
+
+int RGWRados::Object::Read::get_attr(const char *name, bufferlist& dest)
+{
+  RGWObjState *state;
+  int r = source->get_state(&state, true);
+  if (r < 0)
+    return r;
+  if (!state->exists)
+    return -ENOENT;
+  if (!state->get_attr(name, dest))
+    return -ENODATA;
+
+  return 0;
+}
+
 

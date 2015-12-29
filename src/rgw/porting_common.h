@@ -1416,6 +1416,11 @@ static inline int rgw_str_to_bool(const char *s, int def_val)
           strcasecmp(s, "yes") == 0 ||
           strcasecmp(s, "1") == 0);
 }
+static inline bool str_startswith(const string& str, const string& prefix)
+{
+  return (str.compare(0, prefix.size(), prefix) == 0);
+}
+
 /** Convert an input URL into a sane object name
  * by converting %-escaped strings into characters, etc*/
 extern bool url_decode(string& src_str, string& dest_str, bool in_query = false);
@@ -1437,5 +1442,6 @@ extern int gen_rand_alphanumeric_lower(CephContext *cct, string *str, int length
 /** Check if the req_state's user has the necessary permissions
  * to do the requested action */
 extern bool verify_bucket_permission(struct req_state *s, int perm);
+extern string rgw_string_unquote(const string& s);
 
 #endif

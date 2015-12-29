@@ -26,8 +26,7 @@ LOCAL_LIBS 	 = ../include/libinclude.a ../common/libcommon.a ../json_spirit/libj
 			    ../auth/libauth.a    \
 			   ../log/liblog.a ../msg/libmsg.a 
 
-LD = $(SYS_LIBS) -pthread -lfcgi -lcurl -lexpat
-
+LD = $(SYS_LIBS) -pthread -lfcgi -lcurl -lexpat -lboost_thread -lboost_filesystem  -lboost_system
 RGW_SERVER  := rgw
 TEST_RGW 	:= test_main
 

@@ -20,6 +20,21 @@
 #include "porting_rest_s3.h"
 #include "global/global.h"
 
+struct response_attr_param {
+  const char *param;
+  const char *http_attr;
+};
+
+static struct response_attr_param resp_attr_params[] = {
+  {"response-content-type", "Content-Type"},
+  {"response-content-language", "Content-Language"},
+  {"response-expires", "Expires"},
+  {"response-cache-control", "Cache-Control"},
+  {"response-content-disposition", "Content-Disposition"},
+  {"response-content-encoding", "Content-Encoding"},
+  {NULL, NULL},
+};
+
 static bool looks_like_ip_address(const char *bucket)
 {
   int num_periods = 0;
@@ -206,9 +221,9 @@ RGWOp *RGWHandler_ObjStore_Obj_S3::get_obj_op(bool get_data)
   if (is_acl_op()) {
     return NULL;//new RGWGetACLs_ObjStore_S3;
   }
-  //RGWGetObj_ObjStore_S3 *get_obj_op = new RGWGetObj_ObjStore_S3;
-  //get_obj_op->set_get_data(get_data);
-  return NULL;//get_obj_op;
+  RGWGetObj_ObjStore_S3 *get_obj_op = new RGWGetObj_ObjStore_S3;
+  get_obj_op->set_get_data(get_data);
+  return get_obj_op;
 }
 RGWOp *RGWHandler_ObjStore_Obj_S3::op_get()
 {
@@ -550,4 +565,126 @@ void RGWListBucket_ObjStore_S3::send_response()
   s->formatter->close_section();
   rgw_flush_formatter_and_reset(s, s->formatter);
 }
+
+int RGWGetObj_ObjStore_S3::send_response_data_error()
+{
+  bufferlist bl;
+  return send_response_data(bl, 0 , 0);
+}
+
+int RGWGetObj_ObjStore_S3::send_response_data(bufferlist& bl, off_t bl_ofs, off_t bl_len)
+{
+  const char *content_type = NULL;
+  string content_type_str;
+  map<string, string> response_attrs;
+  map<string, string>::iterator riter;
+  bufferlist metadata_bl;
+
+  if (ret)
+    goto done;
+
+  if (sent_header)
+    goto send_data;
+
+  if (range_str)
+    dump_range(s, start, end, s->obj_size);
+
+  if (s->system_request &&
+      s->info.args.exists(RGW_SYS_PARAM_PREFIX "prepend-metadata")) {
+
+    /* JSON encode object metadata */
+    JSONFormatter jf;
+    jf.open_object_section("obj_metadata");
+    encode_json("attrs", attrs, &jf);
+    encode_json("mtime", lastmod, &jf);
+    jf.close_section();
+    stringstream ss;
+    jf.flush(ss);
+    metadata_bl.append(ss.str());
+    s->cio->print("Rgwx-Embedded-Metadata-Len: %lld\r\n", (long long)metadata_bl.length());
+    total_len += metadata_bl.length();
+  }
+
+  if (s->system_request && lastmod) {
+    /* we end up dumping mtime in two different methods, a bit redundant */
+    dump_epoch_header(s, "Rgwx-Mtime", lastmod);
+  }
+
+  dump_content_length(s, total_len);
+  dump_last_modified(s, lastmod);
+
+  if (!ret) {
+    map<string, bufferlist>::iterator iter = attrs.find(RGW_ATTR_ETAG);
+    if (iter != attrs.end()) {
+      bufferlist& bl = iter->second;
+      if (bl.length()) {
+        char *etag = bl.c_str();
+        dump_etag(s, etag);
+      }
+    }
+
+    for (struct response_attr_param *p = resp_attr_params; p->param; p++) {
+      bool exists;
+      string val = s->info.args.get(p->param, &exists);
+      if (exists) {
+	if (strcmp(p->param, "response-content-type") != 0) {
+	  response_attrs[p->http_attr] = val;
+	} else {
+	  content_type_str = val;
+	  content_type = content_type_str.c_str();
+	}
+      }
+    }
+
+    for (iter = attrs.begin(); iter != attrs.end(); ++iter) {
+      const char *name = iter->first.c_str();
+
+      map<string, string>::iterator aiter = rgw_to_http_attrs.find(name);
+      if (aiter != rgw_to_http_attrs.end()) {
+        if (response_attrs.count(aiter->second) == 0) {
+          /* Was not already overridden by a response param. */
+          response_attrs[aiter->second] = iter->second.c_str();
+        }
+      } else if (iter->first.compare(RGW_ATTR_CONTENT_TYPE) == 0) {
+        /* Special handling for content_type. */
+        if (!content_type) {
+          content_type = iter->second.c_str();
+        }
+      } else if (strncmp(name, RGW_ATTR_META_PREFIX, sizeof(RGW_ATTR_META_PREFIX)-1) == 0) {
+        /* User custom metadata. */
+        name += sizeof(RGW_ATTR_PREFIX) - 1;
+        s->cio->print("%s: %s\r\n", name, iter->second.c_str());
+      }
+    }
+  }
+
+done:
+  set_req_state_err(s, (partial_content && !ret) ? STATUS_PARTIAL_CONTENT : ret);
+
+  dump_errno(s);
+
+  for (riter = response_attrs.begin(); riter != response_attrs.end(); ++riter) {
+    s->cio->print("%s: %s\r\n", riter->first.c_str(), riter->second.c_str());
+  }
+
+  if (!content_type)
+    content_type = "binary/octet-stream";
+
+  end_header(s, this, content_type);
+
+  if (metadata_bl.length()) {
+    s->cio->write(metadata_bl.c_str(), metadata_bl.length());
+  }
+  sent_header = true;
+
+send_data:
+  if (get_data && !ret) {
+    int r = s->cio->write(bl.c_str() + bl_ofs, bl_len);
+    if (r < 0)
+      return r;
+  }
+
+  return 0;
+}
+
 

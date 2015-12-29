@@ -30,6 +30,7 @@
 static set<string> hostnames_set;
 static map<string, string> generic_attrs_map;
 map<int, const char *> http_status_names;
+map<string, string> rgw_to_http_attrs;
 
 int RGWHandler_ObjStore::read_permissions(RGWOp *op_obj)
 {
@@ -753,5 +754,80 @@ void abort_early(struct req_state *s, RGWOp *op, int err_no)
   end_header(s, op);
   rgw_flush_formatter_and_reset(s, s->formatter);
 //  perfcounter->inc(l_rgw_failed_req);
+}
+
+int RGWGetObj_ObjStore::get_params()
+{
+  range_str = s->info.env->get("HTTP_RANGE");
+  if_mod = s->info.env->get("HTTP_IF_MODIFIED_SINCE");
+  if_unmod = s->info.env->get("HTTP_IF_UNMODIFIED_SINCE");
+  if_match = s->info.env->get("HTTP_IF_MATCH");
+  if_nomatch = s->info.env->get("HTTP_IF_NONE_MATCH");
+
+  return 0;
+}
+
+void dump_range(struct req_state *s, uint64_t ofs, uint64_t end, uint64_t total)
+{
+  char range_buf[128];
+
+  /* dumping range into temp buffer first, as libfcgi will fail to digest %lld */
+  snprintf(range_buf, sizeof(range_buf), "%lld-%lld/%lld", (long long)ofs, (long long)end, (long long)total);
+  int r = s->cio->print("Content-Range: bytes %s\r\n", range_buf);
+  if (r < 0) {
+    ldout(s->cct, 0) << "ERROR: s->cio->print() returned err=" << r << dendl;
+  }
+}
+
+void dump_epoch_header(struct req_state *s, const char *name, time_t t)
+{
+  char buf[32];
+  snprintf(buf, sizeof(buf), "%lld", (long long)t);
+
+  int r = s->cio->print("%s: %s\r\n", name, buf);
+  if (r < 0) {
+    ldout(s->cct, 0) << "ERROR: s->cio->print() returned err=" << r << dendl;
+  }
+}
+
+void dump_etag(struct req_state * const s, const char * const etag)
+{
+  if ('\0' == *etag) {
+    return;
+  }
+
+  int r;
+  if (s->prot_flags & RGW_REST_SWIFT) {
+    r = s->cio->print("etag: %s\r\n", etag);
+  } else {
+    r = s->cio->print("ETag: \"%s\"\r\n", etag);
+  }
+
+  if (r < 0) {
+    ldout(s->cct, 0) << "ERROR: s->cio->print() returned err=" << r << dendl;
+  }
+}
+
+void dump_time_header(struct req_state *s, const char *name, time_t t)
+{
+
+  char timestr[TIME_BUF_SIZE];
+  struct tm result;
+  struct tm *tmp = gmtime_r(&t, &result);
+  if (tmp == NULL)
+    return;
+
+  if (strftime(timestr, sizeof(timestr), "%a, %d %b %Y %H:%M:%S %Z", tmp) == 0)
+    return;
+
+  int r = s->cio->print("%s: %s\r\n", name, timestr);
+  if (r < 0) {
+    ldout(s->cct, 0) << "ERROR: s->cio->print() returned err=" << r << dendl;
+  }
+}
+
+void dump_last_modified(struct req_state *s, time_t t)
+{
+  dump_time_header(s, "Last-Modified", t);
 }
 

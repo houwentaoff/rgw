@@ -16,6 +16,17 @@
  *
  * =====================================================================================
  */
+#include <errno.h>
+#include <stdlib.h>
+
+#include <sstream>
+
+#include "common/Clock.h"
+#include "common/armor.h"
+#include "common/mime.h"
+#include "common/utf8.h"
+#include "common/ceph_json.h"
+
 #include "porting_op.h"
 #include "porting_common.h"
 #include "porting_rest.h"
@@ -76,6 +87,25 @@ static int parse_range(const char *range, off_t& ofs, off_t& end, bool *partial_
   r = 0;
 done:
   return r;
+}
+
+static bool object_is_expired(map<string, bufferlist>& attrs) {
+  map<string, bufferlist>::iterator iter = attrs.find(RGW_ATTR_DELETE_AT);
+  if (iter != attrs.end()) {
+    utime_t delete_at;
+    try {
+      ::decode(delete_at, iter->second);
+    } catch (buffer::error& err) {
+      dout(0) << "ERROR: " << __func__ << ": failed to decode " RGW_ATTR_DELETE_AT " attr" << dendl;
+      return false;
+    }
+
+    if (delete_at <= ceph_clock_now(NULL)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 int RGWOp::verify_op_mask()
@@ -584,7 +614,7 @@ public:
   virtual ~RGWGetObj_CB() {}
 
   int handle_data(bufferlist& bl, off_t bl_ofs, off_t bl_len) {
-//    return op->get_data_cb(bl, bl_ofs, bl_len);
+    return op->get_data_cb(bl, bl_ofs, bl_len);
   }
 };
 
@@ -649,7 +679,7 @@ void RGWGetObj::execute()
 {
   utime_t start_time = s->time;
   bufferlist bl;
-//  gc_invalidate_time = ceph_clock_now(s->cct);
+  gc_invalidate_time = ceph_clock_now(s->cct);
   gc_invalidate_time += 10;//(s->cct->_conf->rgw_gc_obj_min_wait / 2);
 
   RGWGetObj_CB cb(this);
@@ -683,7 +713,7 @@ void RGWGetObj::execute()
   read_op.params.obj_size = &s->obj_size;
   read_op.params.perr = &s->err;
 
-//  ret = read_op.prepare(&new_ofs, &new_end);
+  ret = read_op.prepare(&new_ofs, &new_end);
   if (ret < 0)
     goto done_err;
 
@@ -698,10 +728,10 @@ void RGWGetObj::execute()
 
   /* Check whether the object has expired. Swift API documentation
    * stands that we should return 404 Not Found in such case. */
-//  if (need_object_expiration() && object_is_expired(attrs)) {
-//    ret = -ENOENT;
-//    goto done_err;
-//  }
+  if (need_object_expiration() && object_is_expired(attrs)) {
+    ret = -ENOENT;
+    goto done_err;
+  }
 
   ofs = new_ofs;
   end = new_end;
@@ -728,5 +758,32 @@ done_err:
   send_response_data_error();
 }
 
+int RGWGetObj::verify_permission()
+{
+#if 0
+  obj = rgw_obj(s->bucket, s->object);
+  store->set_atomic(s->obj_ctx, obj);
+  if (get_data)
+    store->set_prefetch_data(s->obj_ctx, obj);
+
+  if (!verify_object_permission(s, RGW_PERM_READ))
+    return -EACCES;
+#endif
+  return 0;
+}
+int RGWGetObj::get_data_cb(bufferlist& bl, off_t bl_ofs, off_t bl_len)
+{
+  /* garbage collection related handling */
+  utime_t start_time = ceph_clock_now(s->cct);
+  if (start_time > gc_invalidate_time) {
+    int r = 0;//store->defer_gc(s->obj_ctx, obj);
+    if (r < 0) {
+      dout(0) << "WARNING: could not defer gc entry for obj" << dendl;
+    }
+    gc_invalidate_time = start_time;
+    gc_invalidate_time += 10;//(s->cct->_conf->rgw_gc_obj_min_wait / 2);
+  }
+  return send_response_data(bl, bl_ofs, bl_len);
+}
 
 

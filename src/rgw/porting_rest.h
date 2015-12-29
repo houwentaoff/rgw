@@ -22,6 +22,8 @@
 #include "porting_common.h"
 #include "porting_op.h"
 
+extern std::map<std::string, std::string> rgw_to_http_attrs;
+
 class RGWRESTMgr {
     bool should_log;
     protected:
@@ -100,6 +102,21 @@ public:
   ~RGWListBucket_ObjStore() {}
 };
 
+class RGWGetObj_ObjStore : public RGWGetObj
+{
+protected:
+  bool sent_header;
+public:
+  RGWGetObj_ObjStore() : sent_header(false) {}
+
+  virtual void init(RGWRados *store, struct req_state *s, RGWHandler *h) {
+    RGWGetObj::init(store, s, h);
+    sent_header = false;
+  }
+
+  int get_params();
+};
+
 static const int64_t NO_CONTENT_LENGTH = -1;
 
 extern void set_req_state_err(struct req_state *s, int err_no);
@@ -126,5 +143,12 @@ extern void dump_bucket_from_state(struct req_state *s);
 extern void abort_early(struct req_state *s, RGWOp *op, int err);
 extern void dump_redirect(struct req_state *s, const string& redirect);
 
+extern void dump_range(struct req_state *s, uint64_t ofs, uint64_t end, uint64_t total_size);
+
+extern void dump_epoch_header(struct req_state *s, const char *name, time_t t);
+extern void dump_content_length(struct req_state *s, uint64_t len);
+extern void dump_last_modified(struct req_state *s, time_t t);
+extern void dump_etag(struct req_state *s, const char *etag);
+extern void dump_time_header(struct req_state *s, const char *name, time_t t);
 
 #endif

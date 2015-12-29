@@ -59,6 +59,9 @@ class RGWRados
         RGWRados(){}
         ~RGWRados(){}
     public:
+      int get_obj_state(RGWObjectCtx *rctx, rgw_obj& obj, RGWObjState **state, RGWObjVersionTracker *objv_tracker, bool follow_olh);
+      int get_obj_state_impl(RGWObjectCtx *rctx, rgw_obj& obj, RGWObjState **state, RGWObjVersionTracker *objv_tracker, bool follow_olh);
+       
       int cls_user_list_buckets(rgw_obj& obj,
                             const string& in_marker, int max_entries,
                             list<cls_user_bucket_entry>& entries,
@@ -99,6 +102,13 @@ class RGWRados
       }
       virtual int get_bucket_info(RGWObjectCtx& obj_ctx, const string& bucket_name, RGWBucketInfo& info,
                                   time_t *pmtime, map<string, bufferlist> *pattrs = NULL);
+  /**
+   * a simple object read without keeping state
+   */
+      virtual int raw_obj_stat(rgw_obj& obj, uint64_t *psize, time_t *pmtime, uint64_t *epoch,
+                               map<string, bufferlist> *attrs, bufferlist *first_chunk,
+                               RGWObjVersionTracker *objv_tracker);
+      
   class SystemObject {
     RGWRados *store;
     RGWObjectCtx& ctx;
@@ -160,6 +170,8 @@ class RGWRados
     bool versioning_disabled;
 
     bool bs_initialized;
+    protected:
+        int get_state(RGWObjState **pstate, bool follow_olh);
     public:
         Object(RGWRados *_store, RGWBucketInfo& _bucket_info, RGWObjectCtx& _ctx, rgw_obj& _obj) : store(_store), bucket_info(_bucket_info),
                                                                                                    ctx(_ctx), obj(_obj)/*, bs(store)*/,
@@ -353,6 +365,12 @@ struct RGWObjState {
     attrset.clear();
     data.clear();
   }
+};
+
+struct rgw_rados_ref {
+  string oid;
+  string key;
+  librados::IoCtx ioctx;
 };
 
 
