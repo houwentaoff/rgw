@@ -681,7 +681,13 @@ void RGWGetObj::execute()
   uint64_t lenaa = 0;                   
   string full_path="";  
   struct stat st;
+  int64_t left;
   librados::ObjectReadOperation test;  
+#define BLOCK_SIZE          (4*1024)            /*  */
+  char buf[BLOCK_SIZE+1];
+  int fd = -1;
+  size_t off = 0;
+  int result = 0;
     
   utime_t start_time = s->time;
   bufferlist bl;
@@ -709,7 +715,7 @@ void RGWGetObj::execute()
   new_ofs = ofs;
   new_end = end;
 
-  full_path += string("/fisamba/") + s->bucket.name +string("/") + s->object.name;
+  full_path += G.buckets_root + string("/") + s->bucket.name +string("/") + s->object.name;
   ::stat(full_path.c_str(), &st);
 
   read_op.conds.mod_ptr = mod_ptr;
@@ -724,8 +730,8 @@ void RGWGetObj::execute()
 
   *read_op.params.read_size = st.st_size;
   *read_op.params.obj_size =  st.st_size;
-#if 0
-//  ret = read_op.prepare(&new_ofs, &new_end);
+#if 1
+  ret = read_op.prepare(&new_ofs, &new_end);
   if (ret < 0)
     goto done_err;
 
@@ -769,10 +775,28 @@ void RGWGetObj::execute()
   lenaa = st.st_size;
   end = lenaa;
   new_end = end;
-  test.read(0, lenaa, &bl, NULL);
+  left = lenaa;
+  //    int ret = -1;
+
+  if ((fd = ::open(full_path.c_str(), O_RDONLY)) < 0)
+  {
+      result = -1;
+      goto done_err;
+  }
+  while (left > 0)
+  {
+      if ((result = ::pread(fd, buf, BLOCK_SIZE, off)) < 0)
+      {
+          goto done_err;
+      }
+      bl.append(buf, BLOCK_SIZE);
+      send_response_data(bl, 0, bl.length());
+      bl.clear();
+      off += BLOCK_SIZE;
+      left -= BLOCK_SIZE;
+  }  
+  //  test.read(0, lenaa, &bl, NULL);
 //  bl.append("hello this is test", strlen("hello this is test"));
-  send_response_data(bl, 0, bl.length());
-  bl.clear();
  /* :TODO:End---  */
 
   send_response_data(bl, 0, /*sizeof("abcdefgaaaa")*/0);

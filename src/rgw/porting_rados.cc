@@ -1258,10 +1258,10 @@ int RGWRados::raw_obj_stat(rgw_obj& obj, uint64_t *psize, time_t *pmtime, uint64
   map<string, bufferlist> unfiltered_attrset;
   uint64_t size = 0;
   time_t mtime = 0;
-
-  ObjectReadOperation op;
+  string path  = G.buckets_root + string("/") + obj.bucket.name + string("/") + obj.object;
+  ObjectReadOperation op(NULL, path.c_str());
   if (objv_tracker) {
-//    objv_tracker->prepare_op_for_read(&op);
+    objv_tracker->prepare_op_for_read(&op);
   }
   if (attrs) {
     op.getxattrs(&unfiltered_attrset, NULL);
@@ -1270,7 +1270,7 @@ int RGWRados::raw_obj_stat(rgw_obj& obj, uint64_t *psize, time_t *pmtime, uint64
     op.stat(&size, &mtime, NULL);
   }
   if (first_chunk) {
-    op.read(0, 100/* cct->_conf->rgw_max_chunk_size */, first_chunk, NULL);
+    op.read(0, G.rgw_max_chunk_size/* cct->_conf->rgw_max_chunk_size */, first_chunk, NULL);
   }
   bufferlist outbl;
   r = 0;//ref.ioctx.operate(ref.oid, &op, &outbl);

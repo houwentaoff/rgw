@@ -46,11 +46,19 @@ namespace librados
    */
   class CEPH_RADOS_API ObjectOperation
   {
+    string oid;
+    string full_path;
+    uint64_t size;
   public:
+    ObjectOperation(const char * _oid, const char * _full_path);
     ObjectOperation(){};
     virtual ~ObjectOperation(){};
     void exec(const char *cls, const char *method, bufferlist& inbl){};
     void exec(const char *cls, const char *method, bufferlist& inbl, bufferlist *obl, int *prval){};
+    string get_oid(){return oid;}
+    string get_path(){return full_path;}
+    uint64_t get_size(){return size;}
+    void set_size(uint64_t _size){size = _size;}
   protected:
 //    ObjectOperationImpl *impl;
     ObjectOperation(const ObjectOperation& rhs){};
@@ -65,6 +73,7 @@ namespace librados
   class CEPH_RADOS_API ObjectReadOperation : public ObjectOperation
   {
     public:
+        ObjectReadOperation(const char * _oid, const char * _full_path):ObjectOperation(_oid, _full_path) {}
         ObjectReadOperation() {}
         ~ObjectReadOperation() {}
     void stat(uint64_t *psize, time_t *pmtime, int *prval);

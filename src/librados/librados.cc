@@ -58,18 +58,36 @@ void librados::ObjectOperation::exec(const char *cls, const char *method, buffer
 //  o->call(cls, method, inbl, outbl, NULL, prval);
 }
 #endif
+librados::ObjectOperation::ObjectOperation(const char * _oid = NULL, const char * _full_path = NULL)
+{
+    oid        = (!_oid) ? "" : _oid;
+    full_path  = (!_full_path) ? "" : _full_path;
+}
 void librados::ObjectReadOperation::stat(uint64_t *psize, time_t *pmtime, int *prval)
 {
  /* :TODO:12/29/2015 11:48:54 PM:hwt:  */
     struct stat st;
     int ret = -1;
+    string path;
+    string oid;
 
-    if ((ret = ::stat("/path", &st)) < 0)
+    if ((path = ObjectOperation::get_path()) != "")
+    {
+
+    }
+    else
+    {
+        oid  = ObjectOperation::get_oid();
+        //change oid to path
+//        path = "";
+    }
+    if ((ret = ::stat(path.c_str(), &st)) < 0)
     {
         goto done;
     }
     *psize   = st.st_size;
-    *pmtime = st.st_mtime;
+    *pmtime  = st.st_mtime;
+    ObjectOperation::set_size(st.st_size);
 
 done:
     if (prval)
@@ -88,11 +106,23 @@ void librados::ObjectReadOperation::read(size_t off, uint64_t len, bufferlist *p
      /* :TODO:12/29/2015 11:50:08 PM:hwt:  */
 #define BLOCK_SIZE          1024            /*  */
     char buf[BLOCK_SIZE+1];
-    int64_t left = len;
+    int64_t left = len > ObjectOperation::get_size() ? ObjectOperation::get_size() : len;
     int ret = -1;
     int fd = -1;
+    string path;
+    string oid;
 
-    if ((fd = ::open("/path", O_RDONLY)) < 0)
+    if ((path = ObjectOperation::get_path()) != "")
+    {
+
+    }
+    else
+    {
+        oid  = ObjectOperation::get_oid();
+        //change oid to path
+//        path = "";
+    }
+    if ((fd = ::open(path.c_str(), O_RDONLY)) < 0)
     {
         ret = -1;
         goto done;

@@ -669,6 +669,7 @@ int main ( int argc, char *argv[] )
     G.rgw_thread_pool_size          = 1;
     G.rgw_list_buckets_max_chunk    = 1000;
     G.buckets_root                  = "/fisamba";
+    G.rgw_max_chunk_size            = 4*1024*1024;
     
     ldout(0, 0)<<"hello world\n"<<dendl;
 //    check_curl();    

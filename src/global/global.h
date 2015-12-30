@@ -68,6 +68,8 @@ struct globals {
     bool rgw_relaxed_s3_bucket_names;
     /* bucket root path */
     std::string buckets_root;
+    /* max chunk size*/
+    uint64_t rgw_max_chunk_size;
 };
 
 #endif
