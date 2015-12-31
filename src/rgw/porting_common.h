@@ -35,6 +35,7 @@
 #include "cls/version/cls_version_types.h"
 #include "cls/rgw/cls_rgw_types.h"
 #include "cls/user/cls_user_types.h"
+#include "include/rados/librados.hh"
 
 using namespace std;
 
@@ -1075,7 +1076,7 @@ struct RGWObjVersionTracker {
     return &read_version;
   }
 
-  void prepare_op_for_read(/*librados::ObjectReadOperation *op*/){};//
+  void prepare_op_for_read(librados::ObjectReadOperation *op){};//
   void prepare_op_for_write(/*librados::ObjectWriteOperation *op*/){};//
 
   void apply_write() {

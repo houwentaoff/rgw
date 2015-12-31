@@ -1258,7 +1258,7 @@ int RGWRados::raw_obj_stat(rgw_obj& obj, uint64_t *psize, time_t *pmtime, uint64
   map<string, bufferlist> unfiltered_attrset;
   uint64_t size = 0;
   time_t mtime = 0;
-  string path  = G.buckets_root + string("/") + obj.bucket.name + string("/") + obj.object;
+  string path  = G.buckets_root + string("/") + obj.bucket.name + string("/") + obj.get_object();
   ObjectReadOperation op(NULL, path.c_str());
   if (objv_tracker) {
     objv_tracker->prepare_op_for_read(&op);
