@@ -132,5 +132,25 @@ namespace librados
     void release(){};
 //    AioCompletionImpl *pc;
   };  
+  /*
+   * ObjectWriteOperation : compound object write operation
+   * Batch multiple object operations into a single request, to be applied
+   * atomically.
+   */
+  class CEPH_RADOS_API ObjectWriteOperation : public ObjectOperation
+  { 
+  protected:
+    time_t *pmtime;
+  public:
+    ObjectWriteOperation() : pmtime(NULL) {}
+    ~ObjectWriteOperation() {}
+
+    void mtime(time_t *pt) {
+      pmtime = pt;
+    }
+    
+
+    friend class IoCtx;
+  };
 }
 #endif

@@ -285,4 +285,113 @@ public:
   virtual bool need_object_expiration() { return false; }
 };
 
+class RGWCreateBucket : public RGWOp {
+protected:
+  int ret;
+  RGWAccessControlPolicy policy;
+  string location_constraint;
+  string placement_rule;
+  RGWBucketInfo info;
+  obj_version ep_objv;
+  bool has_cors;
+//  RGWCORSConfiguration cors_config;
+
+  bufferlist in_data;
+
+public:
+  RGWCreateBucket() : ret(0), has_cors(false) {}
+
+  int verify_permission(){};
+  void pre_exec();
+  void execute();
+  virtual void init(RGWRados *store, struct req_state *s, RGWHandler *h) {
+    RGWOp::init(store, s, h);
+    policy.set_ctx(s->cct);
+  }
+  virtual int get_params() { return 0; }
+  virtual void send_response() = 0;
+  virtual const string name() { return "create_bucket"; }
+  virtual RGWOpType get_type() { return RGW_OP_CREATE_BUCKET; }
+  virtual uint32_t op_mask() { return RGW_OP_TYPE_WRITE; }
+};
+
+class RGWDeleteBucket : public RGWOp {
+protected:
+  int ret;
+
+  RGWObjVersionTracker objv_tracker;
+
+public:
+  RGWDeleteBucket() : ret(0) {}
+
+  int verify_permission();
+  void pre_exec();
+  void execute();
+
+  virtual void send_response() = 0;
+  virtual const string name() { return "delete_bucket"; }
+  virtual RGWOpType get_type() { return RGW_OP_DELETE_BUCKET; }
+  virtual uint32_t op_mask() { return RGW_OP_TYPE_DELETE; }
+};
+
+class RGWPutObj : public RGWOp {
+
+  friend class RGWPutObjProcessor;
+
+protected:
+  int ret;
+  off_t ofs;
+  const char *supplied_md5_b64;
+  const char *supplied_etag;
+  const char *if_match;
+  const char *if_nomatch;
+  string etag;
+  bool chunked_upload;
+//  RGWAccessControlPolicy policy;
+  const char *obj_manifest;
+  time_t mtime;
+
+  MD5 *user_manifest_parts_hash;
+
+  uint64_t olh_epoch;
+  string version_id;
+
+  time_t delete_at;
+
+public:
+  RGWPutObj() {
+    ret = 0;
+    ofs = 0;
+    supplied_md5_b64 = NULL;
+    supplied_etag = NULL;
+    if_match = NULL;
+    if_nomatch = NULL;
+    chunked_upload = false;
+    obj_manifest = NULL;
+    mtime = 0;
+    user_manifest_parts_hash = NULL;
+    olh_epoch = 0;
+    delete_at = 0;
+  }
+
+  virtual void init(RGWRados *store, struct req_state *s, RGWHandler *h) {
+    RGWOp::init(store, s, h);
+    policy.set_ctx(s->cct);
+  }
+
+  RGWPutObjProcessor *select_processor(RGWObjectCtx& obj_ctx, bool *is_multipart){};
+  void dispose_processor(RGWPutObjProcessor *processor){};
+
+  int verify_permission(){};
+  void pre_exec();
+  void execute();
+
+  virtual int get_params() = 0;
+  virtual int get_data(bufferlist& bl) = 0;
+  virtual void send_response() = 0;
+  virtual const string name() { return "put_obj"; }
+  virtual RGWOpType get_type() { return RGW_OP_PUT_OBJ; }
+  virtual uint32_t op_mask() { return RGW_OP_TYPE_WRITE; }
+};
+
 #endif

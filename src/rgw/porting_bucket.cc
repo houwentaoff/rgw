@@ -129,25 +129,24 @@ int rgw_link_bucket(RGWRados *store, string user_id, rgw_bucket& bucket, time_t 
 {
   int ret;
   string& bucket_name = bucket.name;
-#if 0
-//  cls_user_bucket_entry new_bucket;
+#if 1
+  cls_user_bucket_entry new_bucket;
 
-//  RGWBucketEntryPoint ep;
-//  RGWObjVersionTracker ot;
+  RGWBucketEntryPoint ep;
+  RGWObjVersionTracker ot;
 
-//  bucket.convert(&new_bucket.bucket);
-//  new_bucket.size = 0;
-  if (!creation_time);
-//    time(&new_bucket.creation_time);
+  bucket.convert(&new_bucket.bucket);
+  new_bucket.size = 0;
+  if (!creation_time)
+    time(&new_bucket.creation_time);
   else
-    ;
-//    new_bucket.creation_time = creation_time;
+    new_bucket.creation_time = creation_time;
 
   map<string, bufferlist> attrs;
-//  RGWObjectCtx obj_ctx(store);
+  RGWObjectCtx obj_ctx(store);
 
   if (update_entrypoint) {
-//    ret = store->get_bucket_entrypoint_info(obj_ctx, bucket_name, ep, &ot, NULL, &attrs);
+    ret = store->get_bucket_entrypoint_info(obj_ctx, bucket_name, ep, &ot, NULL, &attrs);
     if (ret < 0 && ret != -ENOENT) {
 //      ldout(store->ctx(), 0) << "ERROR: store->get_bucket_entrypoint_info() returned " << ret << dendl;
     } else if (ret >= 0 && ep.linked && ep.owner != user_id) {
@@ -159,9 +158,9 @@ int rgw_link_bucket(RGWRados *store, string user_id, rgw_bucket& bucket, time_t 
   string buckets_obj_id;
   rgw_get_buckets_obj(user_id, buckets_obj_id);
 
-//  rgw_obj obj(store->zone.user_uid_pool, buckets_obj_id);
-  rgw_obj obj();
-//  ret = store->cls_user_add_bucket(obj, new_bucket);
+  rgw_obj obj(bucket/*store->zone.user_uid_pool*/, buckets_obj_id);
+//  rgw_obj obj();
+  ret = store->cls_user_add_bucket(obj, new_bucket);
   if (ret < 0) {
 //    ldout(store->ctx(), 0) << "ERROR: error adding bucket to directory: "
 //        << cpp_strerror(-ret)<< dendl;
@@ -173,7 +172,7 @@ int rgw_link_bucket(RGWRados *store, string user_id, rgw_bucket& bucket, time_t 
 
   ep.linked = true;
   ep.owner = user_id;
-//  ret = store->put_bucket_entrypoint_info(bucket_name, ep, false, ot, 0, &attrs);
+  ret = store->put_bucket_entrypoint_info(bucket_name, ep, false, ot, 0, &attrs);
   if (ret < 0)
     goto done_err;
 #endif

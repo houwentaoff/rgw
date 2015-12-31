@@ -766,6 +766,58 @@ int RGWGetObj_ObjStore::get_params()
 
   return 0;
 }
+int RGWPutObj_ObjStore::verify_params()
+{
+  if (s->length) {
+    off_t len = atoll(s->length);
+    if (len > (off_t)(G.rgw_max_put_size)) {
+      return -ERR_TOO_LARGE;
+    }
+  }
+
+  return 0;
+}
+
+int RGWPutObj_ObjStore::get_params()
+{
+  supplied_md5_b64 = s->info.env->get("HTTP_CONTENT_MD5");
+
+  return 0;
+}
+
+int RGWPutObj_ObjStore::get_data(bufferlist& bl)
+{
+  size_t cl;
+  uint64_t chunk_size = G.rgw_max_chunk_size;
+  if (s->length) {
+    cl = atoll(s->length) - ofs;
+    if (cl > chunk_size)
+      cl = chunk_size;
+  } else {
+    cl = chunk_size;
+  }
+
+  int len = 0;
+  if (cl) {
+    bufferptr bp(cl);
+
+    int read_len; /* cio->read() expects int * */
+    int r = s->cio->read(bp.c_str(), cl, &read_len);
+    len = read_len;
+    if (r < 0)
+      return r;
+    bl.append(bp, 0, len);
+  }
+
+  if ((uint64_t)ofs + len > G.rgw_max_put_size) {
+    return -ERR_TOO_LARGE;
+  }
+
+  if (!ofs)
+    supplied_md5_b64 = s->info.env->get("HTTP_CONTENT_MD5");
+
+  return len;
+}
 
 void dump_range(struct req_state *s, uint64_t ofs, uint64_t end, uint64_t total)
 {

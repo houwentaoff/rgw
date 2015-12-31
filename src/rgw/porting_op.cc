@@ -32,6 +32,7 @@
 #include "porting_rest.h"
 #include "porting_rados.h"
 #include "include/rados/librados.hh"
+#include "common/shell.h"
 #include "global/global.h"
 
 static int parse_range(const char *range, off_t& ofs, off_t& end, bool *partial_content)
@@ -119,7 +120,7 @@ int RGWOp::verify_op_mask()
 //    return -EPERM;
 //  }
 
-  if (!s->system_request && (required_mask & RGW_OP_TYPE_MODIFY) /*  && !store->zone.is_master */)  {
+  if (!s->system_request && (required_mask & RGW_OP_TYPE_MODIFY) && 0/*  && !store->zone.is_master */)  {
     ldout(s->cct, 5) << "NOTICE: modify request to a non-master zone by a non-system user, permission denied"  << dendl;
     return -EPERM;
   }
@@ -730,7 +731,7 @@ void RGWGetObj::execute()
 
   *read_op.params.read_size = st.st_size;
   *read_op.params.obj_size =  st.st_size;
-#if 1
+#if 0
   ret = read_op.prepare(&new_ofs, &new_end);
   if (ret < 0)
     goto done_err;
@@ -770,7 +771,7 @@ void RGWGetObj::execute()
   if (ret < 0) {
     goto done_err;
   }
-#endif
+#else
  /* :TODO:2015/12/29 17:46:41:hwt:  */
   lenaa = st.st_size;
   end = lenaa;
@@ -798,7 +799,7 @@ void RGWGetObj::execute()
   //  test.read(0, lenaa, &bl, NULL);
 //  bl.append("hello this is test", strlen("hello this is test"));
  /* :TODO:End---  */
-
+#endif
   send_response_data(bl, 0, /*sizeof("abcdefgaaaa")*/0);
   return;
 
@@ -834,4 +835,459 @@ int RGWGetObj::get_data_cb(bufferlist& bl, off_t bl_ofs, off_t bl_len)
   return send_response_data(bl, bl_ofs, bl_len);
 }
 
+void RGWCreateBucket::pre_exec()
+{
+  rgw_bucket_object_pre_exec(s);
+}
+
+void RGWCreateBucket::execute()
+{
+  RGWAccessControlPolicy old_policy(s->cct);
+  map<string, bufferlist> attrs;
+  bufferlist aclbl;
+  bufferlist corsbl;
+  bool existed;
+  rgw_obj obj(s->bucket/*store->zone.domain_root*/, s->bucket_name_str);
+  obj_version objv, *pobjv = NULL;
+
+  ret = get_params();
+  if (ret < 0)
+    return;
+
+//  if (!store->region.is_master &&
+//      store->region.api_name != location_constraint) {
+//    ldout(s->cct, 0) << "location constraint (" << location_constraint << ") doesn't match region" << " (" << store->region.api_name << ")" << dendl;
+//    ret = -EINVAL;
+//    return;
+//  }
+
+  /* we need to make sure we read bucket info, it's not read before for this specific request */
+  RGWObjectCtx& obj_ctx = *static_cast<RGWObjectCtx *>(s->obj_ctx);
+  ret = store->get_bucket_info(obj_ctx, s->bucket_name_str, s->bucket_info, NULL, &s->bucket_attrs);
+  if (ret < 0 && ret != -ENOENT)
+    return;
+  s->bucket_exists = (ret != -ENOENT);
+
+//  s->bucket_owner.set_id(s->user.user_id);
+//  s->bucket_owner.set_name(s->user.display_name);
+  if (s->bucket_exists) {
+    int r = 0;//get_policy_from_attr(s->cct, store, s->obj_ctx, s->bucket_info, s->bucket_attrs,
+//                                 &old_policy, obj);
+    if (r >= 0)  {
+      if (old_policy.get_owner().get_id().compare(s->user.user_id) != 0) {
+        ret = -EEXIST;
+        return;
+      }
+    }
+  }
+
+  RGWBucketInfo master_info;
+  rgw_bucket *pmaster_bucket;
+  time_t creation_time;
+
+  if (0/* !store->region.is_master */) {
+#if 0
+    JSONParser jp;
+    ret = forward_request_to_master(s, NULL, store, in_data, &jp);
+    if (ret < 0)
+      return;
+
+    JSONDecoder::decode_json("entry_point_object_ver", ep_objv, &jp);
+    JSONDecoder::decode_json("object_ver", objv, &jp);
+    JSONDecoder::decode_json("bucket_info", master_info, &jp);
+    ldout(s->cct, 20) << "parsed: objv.tag=" << objv.tag << " objv.ver=" << objv.ver << dendl;
+    ldout(s->cct, 20) << "got creation time: << " << master_info.creation_time << dendl;
+    pmaster_bucket= &master_info.bucket;
+    creation_time = master_info.creation_time;
+    pobjv = &objv;
+#endif
+  } else {
+    pmaster_bucket = NULL;
+    creation_time = 0;
+  }
+
+  string region_name;
+
+  if (s->system_request) {
+    region_name = s->info.args.get(RGW_SYS_PARAM_PREFIX "region");
+    if (region_name.empty()) {
+//      region_name = store->region.name;
+    }
+  } else {
+//    region_name = store->region.name;
+  }
+
+  if (s->bucket_exists) {
+    string selected_placement_rule;
+    rgw_bucket bucket;
+//    ret = store->select_bucket_placement(s->user, region_name, placement_rule, s->bucket_name_str, bucket, &selected_placement_rule);
+    if (selected_placement_rule != s->bucket_info.placement_rule) {
+      ret = -EEXIST;
+      return;
+    }
+  }
+
+  policy.encode(aclbl);
+
+  attrs[RGW_ATTR_ACL] = aclbl;
+
+  if (has_cors) {
+//    cors_config.encode(corsbl);
+    attrs[RGW_ATTR_CORS] = corsbl;
+  }
+  s->bucket.name = s->bucket_name_str;
+  ret = store->create_bucket(s->user, s->bucket, region_name, placement_rule, attrs, info, pobjv,
+                             &ep_objv, creation_time, pmaster_bucket, true);
+  /* continue if EEXIST and create_bucket will fail below.  this way we can recover
+   * from a partial create by retrying it. */
+  ldout(s->cct, 20) << "rgw_create_bucket returned ret=" << ret << " bucket=" << s->bucket << dendl;
+
+  if (ret && ret != -EEXIST)
+    return;
+
+  existed = (ret == -EEXIST);
+
+  if (existed) {
+    /* bucket already existed, might have raced with another bucket creation, or
+     * might be partial bucket creation that never completed. Read existing bucket
+     * info, verify that the reported bucket owner is the current user.
+     * If all is ok then update the user's list of buckets.
+     * Otherwise inform client about a name conflict.
+     */
+    if (info.owner.compare(s->user.user_id) != 0) {
+      ret = -EEXIST;
+      return;
+    }
+    s->bucket = info.bucket;
+  }
+
+  ret = rgw_link_bucket(store, s->user.user_id, s->bucket, info.creation_time, false);
+  if (ret && !existed && ret != -EEXIST) {  /* if it exists (or previously existed), don't remove it! */
+    ret = rgw_unlink_bucket(store, s->user.user_id, s->bucket.name);
+    if (ret < 0) {
+      ldout(s->cct, 0) << "WARNING: failed to unlink bucket: ret=" << ret << dendl;
+    }
+  } else if (ret == -EEXIST || (ret == 0 && existed)) {
+    ret = -ERR_BUCKET_EXISTS;
+  }
+}
+
+int RGWDeleteBucket::verify_permission()
+{
+  if (!verify_bucket_permission(s, RGW_PERM_WRITE))
+    return -EACCES;
+
+  return 0;
+}
+void RGWDeleteBucket::pre_exec()
+{
+  rgw_bucket_object_pre_exec(s);
+}
+
+void RGWDeleteBucket::execute()
+{
+  ret = -EINVAL;
+
+  if (s->bucket_name_str.empty())
+    return;
+
+  RGWObjVersionTracker ot;
+  ot.read_version = s->bucket_info.ep_objv;
+
+  if (s->system_request) {
+    string tag = s->info.args.get(RGW_SYS_PARAM_PREFIX "tag");
+    string ver_str = s->info.args.get(RGW_SYS_PARAM_PREFIX "ver");
+    if (!tag.empty()) {
+      ot.read_version.tag = tag;
+      uint64_t ver;
+      string err;
+      ver = strict_strtol(ver_str.c_str(), 10, &err);
+      if (!err.empty()) {
+        ldout(s->cct, 0) << "failed to parse ver param" << dendl;
+        ret = -EINVAL;
+        return;
+      }
+      ot.read_version.ver = ver;
+    }
+  }
+#if 0
+  ret = store->delete_bucket(s->bucket, ot);
+
+  if (ret == 0) {
+    ret = rgw_unlink_bucket(store, s->user.user_id, s->bucket.name, false);
+    if (ret < 0) {
+      ldout(s->cct, 0) << "WARNING: failed to unlink bucket: ret=" << ret << dendl;
+    }
+  }
+
+  if (ret < 0) {
+    return;
+  }
+
+  if (!store->region.is_master) {
+    bufferlist in_data;
+    JSONParser jp;
+    ret = forward_request_to_master(s, &ot.read_version, store, in_data, &jp);
+    if (ret < 0) {
+      if (ret == -ENOENT) { /* adjust error,
+                               we want to return with NoSuchBucket and not NoSuchKey */
+        ret = -ERR_NO_SUCH_BUCKET;
+      }
+      return;
+    }
+  }
+#endif
+  char cmd_buf[512];
+
+  sprintf(cmd_buf, "[ -d %s/%s ]", G.buckets_root.c_str(), s->bucket_name_str.c_str());
+  if ((ret = shell_simple(cmd_buf))!=0)
+  {
+    ret = -ERR_NO_SUCH_BUCKET;
+    return;
+  }
+  sprintf(cmd_buf, "rm -rf %s/%s", G.buckets_root.c_str(), s->bucket_name_str.c_str());
+  if ((ret = shell_simple(cmd_buf))!=0)
+  {
+    ret = ERR_INTERNAL_ERROR;
+    return;
+  }
+}
+void RGWPutObj::pre_exec()
+{
+  rgw_bucket_object_pre_exec(s);
+}
+void RGWPutObj::execute()
+{
+  RGWPutObjProcessor *processor = NULL;
+  char supplied_md5_bin[CEPH_CRYPTO_MD5_DIGESTSIZE + 1];
+  char supplied_md5[CEPH_CRYPTO_MD5_DIGESTSIZE * 2 + 1];
+  char calc_md5[CEPH_CRYPTO_MD5_DIGESTSIZE * 2 + 1];
+  unsigned char m[CEPH_CRYPTO_MD5_DIGESTSIZE];
+  MD5 hash;
+  bufferlist bl, aclbl;
+  map<string, bufferlist> attrs;
+  int len;
+  map<string, string>::iterator iter;
+  bool multipart;
+
+  bool need_calc_md5 = (obj_manifest == NULL);
+  string full_path=""; 
+#define BLOCK_SIZE          (4*1024)            /*  */
+  char buf[BLOCK_SIZE+1];
+
+//  perfcounter->inc(l_rgw_put);
+  ret = -EINVAL;
+  if (s->object.empty()) {
+    goto done;
+  }
+
+  ret = get_params();
+  if (ret < 0) {
+    ldout(s->cct, 20) << "get_params() returned ret=" << ret << dendl;
+    goto done;
+  }
+
+  ret = 0;// get_system_versioning_params(s, &olh_epoch, &version_id);
+  if (ret < 0) {
+    ldout(s->cct, 20) << "get_system_versioning_params() returned ret=" \
+        << ret << dendl;
+    goto done;
+  }
+
+  if (supplied_md5_b64) {
+    need_calc_md5 = true;
+
+    ldout(s->cct, 15) << "supplied_md5_b64=" << supplied_md5_b64 << dendl;
+    ret = ceph_unarmor(supplied_md5_bin, &supplied_md5_bin[CEPH_CRYPTO_MD5_DIGESTSIZE + 1],
+                       supplied_md5_b64, supplied_md5_b64 + strlen(supplied_md5_b64));
+    ldout(s->cct, 15) << "ceph_armor ret=" << ret << dendl;
+    if (ret != CEPH_CRYPTO_MD5_DIGESTSIZE) {
+      ret = -ERR_INVALID_DIGEST;
+      goto done;
+    }
+
+    buf_to_hex((const unsigned char *)supplied_md5_bin, CEPH_CRYPTO_MD5_DIGESTSIZE, supplied_md5);
+    ldout(s->cct, 15) << "supplied_md5=" << supplied_md5 << dendl;
+  }
+
+  if (!chunked_upload) { /* with chunked upload we don't know how big is the upload.
+                            we also check sizes at the end anyway */
+    ret = 0;//store->check_quota(s->bucket_owner.get_id(), s->bucket,
+                             user_quota, bucket_quota, s->content_length);
+    if (ret < 0) {
+      ldout(s->cct, 20) << "check_quota() returned ret=" << ret << dendl;
+      goto done;
+    }
+  }
+
+  if (supplied_etag) {
+    strncpy(supplied_md5, supplied_etag, sizeof(supplied_md5) - 1);
+    supplied_md5[sizeof(supplied_md5) - 1] = '\0';
+  }
+
+//  processor = select_processor(*static_cast<RGWObjectCtx *>(s->obj_ctx), &multipart);
+
+  ret = 0;//processor->prepare(store, NULL);
+  if (ret < 0) {
+    ldout(s->cct, 20) << "processor->prepare() returned ret=" << ret << dendl;
+    goto done;
+  }
+  full_path += G.buckets_root + string("/") + s->bucket.name +string("/") + s->object.name;
+  if ((fd = ::open(full_path.c_str(), O_RDWR)) < 0)
+  {
+      result = -1;
+      goto done_err;
+  }
+  do {
+    bufferlist data;
+    len = get_data(data);
+    if (len < 0) {
+      ret = len;
+      goto done;
+    }
+    if (!len)
+      break;
+
+    /* do we need this operation to be synchronous? if we're dealing with an object with immutable
+     * head, e.g., multipart object we need to make sure we're the first one writing to this object
+     */
+    bool need_to_wait = (ofs == 0) && multipart;
+
+    bufferlist orig_data;
+
+    if (need_to_wait) {
+      orig_data = data;
+    }
+
+#if 0
+    ret = put_data_and_throttle(processor, data, ofs, (need_calc_md5 ? &hash : NULL), need_to_wait);
+
+    if (ret < 0) {
+      if (!need_to_wait || ret != -EEXIST) {
+        ldout(s->cct, 20) << "processor->thottle_data() returned ret=" << ret << dendl;
+        goto done;
+      }
+
+      ldout(s->cct, 5) << "NOTICE: processor->throttle_data() returned -EEXIST, need to restart write" << dendl;
+
+      /* restore original data */
+      data.swap(orig_data);
+
+      /* restart processing with different oid suffix */
+
+      dispose_processor(processor);
+      processor = select_processor(*static_cast<RGWObjectCtx *>(s->obj_ctx), &multipart);
+
+      string oid_rand;
+      char buf[33];
+      gen_rand_alphanumeric(store->ctx(), buf, sizeof(buf) - 1);
+      oid_rand.append(buf);
+
+      ret = processor->prepare(store, &oid_rand);
+      if (ret < 0) {
+        ldout(s->cct, 0) << "ERROR: processor->prepare() returned " << ret << dendl;
+        goto done;
+      }
+
+      ret = put_data_and_throttle(processor, data, ofs, NULL, false);
+      if (ret < 0) {
+        goto done;
+      }
+    }
+#else
+
+    if ((result = ::pwrite(fd, bl.c_str(), len, ofs)) < 0)
+    {
+        goto done;
+    }
+    bl.clear();
+#endif
+    
+    ofs += len;
+  } while (len > 0);
+
+  if (!chunked_upload && ofs != s->content_length) {
+    ret = -ERR_REQUEST_TIMEOUT;
+    goto done;
+  }
+  s->obj_size = ofs;
+//  perfcounter->inc(l_rgw_put_b, s->obj_size);
+
+//  ret = store->check_quota(s->bucket_owner.get_id(), s->bucket,
+//                           user_quota, bucket_quota, s->obj_size);
+  if (ret < 0) {
+    ldout(s->cct, 20) << "second check_quota() returned ret=" << ret << dendl;
+    goto done;
+  }
+
+  if (need_calc_md5) {
+#if 0
+      processor->complete_hash(&hash);
+    hash.Final(m);
+
+    buf_to_hex(m, CEPH_CRYPTO_MD5_DIGESTSIZE, calc_md5);
+    etag = calc_md5;
+
+    if (supplied_md5_b64 && strcmp(calc_md5, supplied_md5)) {
+      ret = -ERR_BAD_DIGEST;
+      goto done;
+    }
+#endif
+  }
+
+//  policy.encode(aclbl);
+
+  attrs[RGW_ATTR_ACL] = aclbl;
+#if 0
+  if (obj_manifest) {
+    bufferlist manifest_bl;
+    string manifest_obj_prefix;
+    string manifest_bucket;
+
+    char etag_buf[CEPH_CRYPTO_MD5_DIGESTSIZE];
+    char etag_buf_str[CEPH_CRYPTO_MD5_DIGESTSIZE * 2 + 16];
+
+    manifest_bl.append(obj_manifest, strlen(obj_manifest) + 1);
+    attrs[RGW_ATTR_USER_MANIFEST] = manifest_bl;
+    user_manifest_parts_hash = &hash;
+    string prefix_str = obj_manifest;
+    int pos = prefix_str.find('/');
+    if (pos < 0) {
+      ldout(s->cct, 0) << "bad user manifest, missing slash separator: " << obj_manifest << dendl;
+      goto done;
+    }
+
+    manifest_bucket = prefix_str.substr(0, pos);
+    manifest_obj_prefix = prefix_str.substr(pos + 1);
+
+    hash.Final((byte *)etag_buf);
+    buf_to_hex((const unsigned char *)etag_buf, CEPH_CRYPTO_MD5_DIGESTSIZE, etag_buf_str);
+
+    ldout(s->cct, 0) << __func__ << ": calculated md5 for user manifest: " << etag_buf_str << dendl;
+
+    etag = etag_buf_str;
+  }
+  if (supplied_etag && etag.compare(supplied_etag) != 0) {
+    ret = -ERR_UNPROCESSABLE_ENTITY;
+    goto done;
+  }
+  bl.append(etag.c_str(), etag.size() + 1);
+  attrs[RGW_ATTR_ETAG] = bl;
+
+  for (iter = s->generic_attrs.begin(); iter != s->generic_attrs.end(); ++iter) {
+    bufferlist& attrbl = attrs[iter->first];
+    const string& val = iter->second;
+    attrbl.append(val.c_str(), val.size() + 1);
+  }
+
+  rgw_get_request_metadata(s->cct, s->info, attrs);
+  encode_delete_at_attr(delete_at, attrs);
+
+  ret = processor->complete(etag, &mtime, 0, attrs, delete_at, if_match, if_nomatch);
+#endif
+done:
+//  dispose_processor(processor);
+//  perfcounter->tinc(l_rgw_put_lat,
+//                   (ceph_clock_now(s->cct) - s->time));
+}
 

@@ -58,7 +58,15 @@ class RGWRados
     public:
         RGWRados(){}
         ~RGWRados(){}
+    protected:
+          CephContext *cct;
     public:
+      int put_bucket_entrypoint_info(const string& bucket_name, RGWBucketEntryPoint& entry_point, bool exclusive, RGWObjVersionTracker& objv_tracker, time_t mtime,
+                                     map<string, bufferlist> *pattrs);
+
+      int cls_user_add_bucket(rgw_obj& obj, const cls_user_bucket_entry& entry);
+      int cls_user_update_buckets(rgw_obj& obj, list<cls_user_bucket_entry>& entries, bool add);
+      
       int iterate_obj(RGWObjectCtx& ctx, rgw_obj& obj,
                       off_t ofs, off_t end,
                       uint64_t max_chunk_size,
@@ -120,7 +128,17 @@ class RGWRados
       virtual int raw_obj_stat(rgw_obj& obj, uint64_t *psize, time_t *pmtime, uint64_t *epoch,
                                map<string, bufferlist> *attrs, bufferlist *first_chunk,
                                RGWObjVersionTracker *objv_tracker);
-      
+      virtual int create_bucket(RGWUserInfo& owner, rgw_bucket& bucket,
+                                const string& region_name,
+                                const string& placement_rule,
+                                map<std::string,bufferlist>& attrs,
+                                RGWBucketInfo& bucket_info,
+                                obj_version *pobjv,
+                                obj_version *pep_objv,
+                                time_t creation_time,
+                                rgw_bucket *master_bucket,
+                                bool exclusive = true);
+
   class SystemObject {
     RGWRados *store;
     RGWObjectCtx& ctx;

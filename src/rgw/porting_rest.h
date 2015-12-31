@@ -117,6 +117,29 @@ public:
   int get_params();
 };
 
+class RGWCreateBucket_ObjStore : public RGWCreateBucket {
+public:
+  RGWCreateBucket_ObjStore() {}
+  ~RGWCreateBucket_ObjStore() {}
+};
+
+class RGWDeleteBucket_ObjStore : public RGWDeleteBucket {
+public:
+  RGWDeleteBucket_ObjStore() {}
+  ~RGWDeleteBucket_ObjStore() {}
+};
+
+class RGWPutObj_ObjStore : public RGWPutObj
+{
+public:
+  RGWPutObj_ObjStore() {}
+  ~RGWPutObj_ObjStore() {}
+
+  virtual int verify_params();
+  virtual int get_params();
+  int get_data(bufferlist& bl);
+};
+
 static const int64_t NO_CONTENT_LENGTH = -1;
 
 extern void set_req_state_err(struct req_state *s, int err_no);

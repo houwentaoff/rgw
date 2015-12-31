@@ -23,6 +23,11 @@
 #include "cls_user_types.h"
 #include "include/rados/librados.hh"
 
+/*
+ * user objclass
+ */
+void cls_user_set_buckets(librados::ObjectWriteOperation& op, list<cls_user_bucket_entry>& entries, bool add);
+
 void cls_user_bucket_list(librados::ObjectReadOperation& op,
                        const string& in_marker, int max_entries,
                        list<cls_user_bucket_entry>& entries,

@@ -55,4 +55,38 @@ void cls_user_bucket_list(librados::ObjectReadOperation& op,
   *pret = 0;
 //  *truncated = true;
 }
+void cls_user_set_buckets(librados::ObjectWriteOperation& op, list<cls_user_bucket_entry>& entries, bool add)
+{
+#if 0
+  bufferlist in;
+  cls_user_set_buckets_op call;
+  call.entries = entries;
+  call.add = add;
+  call.time = ceph_clock_now(NULL);
+  ::encode(call, in);
+  op.exec("user", "set_buckets_info", in);
+#else
 
+  /*-----------------------------------------------------------------------------
+   *  不能修改文件夹的时间？
+   *-----------------------------------------------------------------------------*/
+  char cmd_buf[512] = {0};
+  int ret;
+  list<cls_user_bucket_entry>::iterator it;
+
+  sprintf(cmd_buf, "mkdir %s", G.buckets_root.c_str());
+  for (it = entries.begin(); it!=entries.end(); it++)
+  {
+    if (true == add)
+    {
+        sprintf(cmd_buf, "mkdir -m 777 %s/%s", G.buckets_root.c_str(), it->bucket.name.c_str());
+        
+    }
+    else
+    {
+//        sprintf(cmd_buf, "mkdir -p -m %s/%s", G.buckets_root.c_str(), it->bucket.name);
+    }
+    ret = shell_simple(cmd_buf);
+  }
+#endif
+}

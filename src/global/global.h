@@ -23,6 +23,7 @@
 #include <string>
 
 #define _M(x)                   (x*(1024*1024))/*  x M bytes*/
+#define _G(x)                   (x*_M(1024))/*  x G bytes*/
 
 #define G (*ptr_to_globals)
 
@@ -70,6 +71,8 @@ struct globals {
     std::string buckets_root;
     /* max chunk size*/
     uint64_t rgw_max_chunk_size;
+    /* nax s3cmd put size */
+    long rgw_max_put_size;
 };
 
 #endif

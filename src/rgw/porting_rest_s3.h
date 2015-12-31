@@ -160,6 +160,28 @@ public:
   void send_response();
   void send_versioned_response();
 };
+class RGWCreateBucket_ObjStore_S3 : public RGWCreateBucket_ObjStore {
+public:
+  RGWCreateBucket_ObjStore_S3() {}
+  ~RGWCreateBucket_ObjStore_S3() {}
 
+  int get_params();
+  void send_response();
+};
+class RGWDeleteBucket_ObjStore_S3 : public RGWDeleteBucket_ObjStore {
+public:
+  RGWDeleteBucket_ObjStore_S3() {}
+  ~RGWDeleteBucket_ObjStore_S3() {}
+
+  void send_response();
+};
+class RGWPutObj_ObjStore_S3 : public RGWPutObj_ObjStore {
+public:
+  RGWPutObj_ObjStore_S3() {}
+  ~RGWPutObj_ObjStore_S3() {}
+
+  int get_params(){};
+  void send_response();
+};
 #endif
 

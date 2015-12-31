@@ -103,7 +103,7 @@ int RGWRados::get_bucket_entrypoint_info(RGWObjectCtx& obj_ctx, const string& bu
   sprintf(cmd_buf, "[ -d %s/%s ]", G.buckets_root.c_str(), bucket_name.c_str());
   int ret = shell_simple(cmd_buf);//rgw_get_system_obj(this, obj_ctx, domain_root/*zone.domain_root*/, bucket_name, bl, objv_tracker, pmtime, pattrs, cache_info);
   if (ret /*<*/ != 0) {
-      ret = ret < 0 ? ret:0-ret;
+      ret = -ENOENT;//ret < 0 ? ret:0-ret;
     return ret;
   }
   entry_point.bucket.name = bucket_name;//add by sean
@@ -1337,4 +1337,159 @@ int RGWRados::flush_read_list(struct get_obj_data *d)
   d->data_lock.Unlock();
   return r;
 }
+int RGWRados::cls_user_add_bucket(rgw_obj& obj, const cls_user_bucket_entry& entry)
+{
+  list<cls_user_bucket_entry> l;
+  l.push_back(entry);
 
+  return cls_user_update_buckets(obj, l, true);
+}
+
+int RGWRados::cls_user_update_buckets(rgw_obj& obj, list<cls_user_bucket_entry>& entries, bool add)
+{
+  rgw_rados_ref ref;
+  rgw_bucket bucket;
+  int r = 0;//get_obj_ref(obj, &ref, &bucket);
+  if (r < 0) {
+    return r;
+  }
+
+  librados::ObjectWriteOperation op;
+  cls_user_set_buckets(op, entries, add);
+//  r = ref.ioctx.operate(ref.oid, &op);
+//  if (r < 0)
+//    return r;
+
+  return 0;
+}
+
+int RGWRados::put_bucket_entrypoint_info(const string& bucket_name, RGWBucketEntryPoint& entry_point,
+        bool exclusive, RGWObjVersionTracker& objv_tracker, time_t mtime,
+        map<string, bufferlist> *pattrs)
+{
+    bufferlist epbl;
+    ::encode(entry_point, epbl);
+    return 0;//rgw_bucket_store_info(this, bucket_name, epbl, exclusive, pattrs, &objv_tracker, mtime);
+}
+
+/*
+ *  * create a bucket with name bucket and the given list of attrs
+ *  * returns 0 on success, -ERR# otherwise.
+ */
+int RGWRados::create_bucket(RGWUserInfo& owner, rgw_bucket& bucket,
+        const string& region_name,
+        const string& placement_rule,
+        map<std::string, bufferlist>& attrs,
+        RGWBucketInfo& info,
+        obj_version *pobjv,
+        obj_version *pep_objv,
+        time_t creation_time,
+        rgw_bucket *pmaster_bucket,
+        bool exclusive)
+{
+#define MAX_CREATE_RETRIES 20 /* need to bound retries */
+  string selected_placement_rule;
+  for (int i = 0; i < MAX_CREATE_RETRIES; i++) {
+    int ret = 0;
+//    ret = select_bucket_placement(owner, region_name, placement_rule, bucket.name, bucket, &selected_placement_rule);
+    if (ret < 0)
+      return ret;
+    bufferlist bl;
+    uint32_t nop = 0;
+    ::encode(nop, bl);
+
+    const string& pool = "";//zone.domain_root.name;
+    const char *pool_str = pool.c_str();
+    librados::IoCtx id_io_ctx;
+//    librados::Rados *rad = get_rados_handle();
+    int r = 0;//rad->ioctx_create(pool_str, id_io_ctx);
+    if (r < 0)
+      return r;
+
+    if (!pmaster_bucket) {
+#if 0
+      uint64_t iid = instance_id();
+      uint64_t bid = next_bucket_id();
+      char buf[zone.name.size() + 48];
+      snprintf(buf, sizeof(buf), "%s.%llu.%llu", zone.name.c_str(), (long long)iid, (long long)bid);
+      bucket.marker = buf;
+      bucket.bucket_id = bucket.marker;
+#endif
+    } else {
+      bucket.marker = pmaster_bucket->marker;
+      bucket.bucket_id = pmaster_bucket->bucket_id;
+    }
+
+    string dir_oid =  dir_oid_prefix;
+    dir_oid.append(bucket.marker);
+
+    r = 0;//init_bucket_index(bucket, bucket_index_max_shards);
+    if (r < 0)
+      return r;
+
+    RGWObjVersionTracker& objv_tracker = info.objv_tracker;
+
+    if (pobjv) {
+      objv_tracker.write_version = *pobjv;
+    } else {
+      objv_tracker.generate_new_write_ver(cct);
+    }
+
+    info.bucket = bucket;
+    info.owner = owner.user_id;
+    info.region = region_name;
+    info.placement_rule = selected_placement_rule;
+//    info.num_shards = bucket_index_max_shards;
+    info.bucket_index_shard_hash_type = RGWBucketInfo::MOD;
+    info.requester_pays = false;
+    if (!creation_time)
+      time(&info.creation_time);
+    else
+      info.creation_time = creation_time;
+    ret = 0;//put_linked_bucket_info(info, exclusive, 0, pep_objv, &attrs, true);
+    if (ret == -EEXIST) {
+       /* we need to reread the info and return it, caller will have a use for it */
+      RGWObjVersionTracker instance_ver = info.objv_tracker;
+      info.objv_tracker.clear();
+      RGWObjectCtx obj_ctx(this);
+      r = get_bucket_info(obj_ctx, bucket.name, info, NULL, NULL);
+      if (r < 0) {
+        if (r == -ENOENT) {
+          continue;
+        }
+        ldout(cct, 0) << "get_bucket_info returned " << r << dendl;
+        return r;
+      }
+
+      /* only remove it if it's a different bucket instance */
+      if (info.bucket.bucket_id != bucket.bucket_id) {
+        /* remove bucket index */
+        librados::IoCtx index_ctx; // context for new bucket
+        map<int, string> bucket_objs;
+        int r = open_bucket_index(bucket, index_ctx, bucket_objs);
+        if (r < 0)
+          return r;
+
+        /* remove bucket meta instance */
+        string entry;
+        get_bucket_instance_entry(bucket, entry);
+        r = 0;//rgw_bucket_instance_remove_entry(this, entry, &instance_ver);
+        if (r < 0)
+          return r;
+
+        map<int, string>::const_iterator biter;
+        for (biter = bucket_objs.begin(); biter != bucket_objs.end(); ++biter) {
+          // Do best effort removal
+//          index_ctx.remove(biter->second);
+        }
+      }
+      /* ret == -ENOENT here */
+    }
+    return ret;
+  }
+
+  /* this is highly unlikely */
+  ldout(cct, 0) << "ERROR: could not create bucket, continuously raced with bucket creation and removal" << dendl;
+  return -ENOENT;
+    
+}
