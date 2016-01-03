@@ -721,7 +721,10 @@ int main ( int argc, char *argv[] )
       return -r;
     }
     fe->run();
-    do{}
+    do
+    {
+        sleep(1);
+    }
     while (true);
 
     return EXIT_SUCCESS;
