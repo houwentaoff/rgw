@@ -1,7 +1,7 @@
 COMPILE
 
 [1] cd src/json_spirit/ && mkdir -p build && cd build && cmake ../ && make && cp \*.a ../
-[2] cs src/ && make all
+[2] cd src/ && make all
 
 INSTALL
 

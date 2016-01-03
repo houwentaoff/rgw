@@ -1421,6 +1421,14 @@ static inline bool str_startswith(const string& str, const string& prefix)
 {
   return (str.compare(0, prefix.size(), prefix) == 0);
 }
+static inline void buf_to_hex(const unsigned char *buf, int len, char *str)
+{
+  int i;
+  str[0] = '\0';
+  for (i = 0; i < len; i++) {
+    sprintf(&str[i*2], "%02x", (int)buf[i]);
+  }
+}
 
 /** Convert an input URL into a sane object name
  * by converting %-escaped strings into characters, etc*/

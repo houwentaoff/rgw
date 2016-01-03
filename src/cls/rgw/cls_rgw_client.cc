@@ -12,6 +12,7 @@
 
 #include "common/debug.h"
 #include "common/shell.h"
+#include <libgen.h>
 
 #include "global/global.h"
 
@@ -37,7 +38,7 @@ static bool issue_bucket_list_op(librados::IoCtx& io_ctx,
   char cmd_buf[512] = {0};
   
   sscanf(oid.c_str(), ".dir.%s", bucket_name);
-  sprintf(cmd_buf, "ls %s/%s", G.buckets_root.c_str(), bucket_name);
+  sprintf(cmd_buf, "ls %s/%s/%s", G.buckets_root.c_str(), bucket_name, filter_prefix.c_str());
   string files = shell_execute(cmd_buf);
   if (files == "")
   {
@@ -49,6 +50,30 @@ static bool issue_bucket_list_op(librados::IoCtx& io_ctx,
   struct stat st;
   string base_path = G.buckets_root + string("/") + string(bucket_name) + string("/");
   string full_path;
+  string dir_prefix;
+  char tmp[512];
+  bool isDir = false;
+
+  sprintf(cmd_buf, "[ -d %s/%s/%s ]", G.buckets_root.c_str(), bucket_name, filter_prefix.c_str());
+  if (filter_prefix != "" /*filter_prefix.find("/") > 0 || */)
+  {
+    if (shell_simple(cmd_buf) == 0)
+    {
+      isDir = true;
+      base_path += filter_prefix;
+    }
+    else
+    {
+      strcpy(tmp, filter_prefix.c_str());
+      dir_prefix = string(dirname(tmp)) + string("/");//   fisamba/cc_cc/(dffseef/gssdsd/)a
+      if (dir_prefix == "./")
+      {
+          dir_prefix = "";
+      }
+      strcpy(tmp, files.c_str());
+      files = basename(tmp);
+    }
+  }
 
   for (; *pos!='\0'; pos += size)
   {
@@ -56,11 +81,27 @@ static bool issue_bucket_list_op(librados::IoCtx& io_ctx,
     if (r!=1)
       break;
     size = strlen(file_name)+1;
-    test.key.name  = file_name;
-    full_path = base_path + string(file_name);
+    full_path = base_path + dir_prefix + string(file_name);
     if (stat(full_path.c_str(), &st) < 0)
     {
       continue;
+    }
+    if (S_ISDIR(st.st_mode))
+    {
+      strcat(file_name, "/");
+    }
+    if (isDir)
+    {
+      test.key.name  = filter_prefix;
+      if (filter_prefix[filter_prefix.length()-1] != '/')
+      {
+        test.key.name += "/";
+      }
+      test.key.name += string(file_name);
+    }
+    else
+    {
+      test.key.name  = dir_prefix + file_name;
     }
     utime_t  utime(st.st_mtime, 0);
     test.meta.size  =  st.st_size;

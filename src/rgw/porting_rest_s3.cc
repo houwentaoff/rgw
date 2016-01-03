@@ -747,8 +747,8 @@ void RGWPutObj_ObjStore_S3::send_response()
   if (ret) {
     set_req_state_err(s, ret);
   } else {
-    if (s->cct->_conf->rgw_s3_success_create_obj_status) {
-      ret = get_success_retcode(s->cct->_conf->rgw_s3_success_create_obj_status);
+    if (1/*s->cct->_conf->rgw_s3_success_create_obj_status*/) {
+      ret = get_success_retcode(1/*s->cct->_conf->rgw_s3_success_create_obj_status*/);
       set_req_state_err(s, ret);
     }
     dump_etag(s, etag.c_str());

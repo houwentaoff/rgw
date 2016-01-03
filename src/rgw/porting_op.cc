@@ -33,7 +33,11 @@
 #include "porting_rados.h"
 #include "include/rados/librados.hh"
 #include "common/shell.h"
+#include "common/ceph_crypto.h"
 #include "global/global.h"
+
+using namespace std;
+using ceph::crypto::MD5;
 
 static int parse_range(const char *range, off_t& ofs, off_t& end, bool *partial_content)
 {
@@ -773,12 +777,13 @@ void RGWGetObj::execute()
   }
 #else
  /* :TODO:2015/12/29 17:46:41:hwt:  */
-  lenaa = st.st_size;
-  end = lenaa;
+//  lenaa = st.st_size;
+  end = st.st_size;
   new_end = end;
-  left = lenaa;
-  //    int ret = -1;
+  left = st.st_size;
 
+
+  //    int ret = -1;
   if ((fd = ::open(full_path.c_str(), O_RDONLY)) < 0)
   {
       result = -1;
@@ -786,17 +791,24 @@ void RGWGetObj::execute()
   }
   while (left > 0)
   {
+#if 1
+      ssize_t len = G.rgw_max_chunk_size > left ? left : G.rgw_max_chunk_size;
+      int retv = bl.read_fd(fd, len);
+      if (retv != len)
+      {
+          goto done_err;
+      }
+#else
       if ((result = ::pread(fd, buf, BLOCK_SIZE, off)) < 0)
       {
           goto done_err;
       }
       bl.append(buf, BLOCK_SIZE);
+#endif
       send_response_data(bl, 0, bl.length());
       bl.clear();
-      off += BLOCK_SIZE;
-      left -= BLOCK_SIZE;
+      left -= G.rgw_max_chunk_size;
   }  
-  //  test.read(0, lenaa, &bl, NULL);
 //  bl.append("hello this is test", strlen("hello this is test"));
  /* :TODO:End---  */
 #endif
@@ -1058,7 +1070,7 @@ void RGWPutObj::pre_exec()
 }
 void RGWPutObj::execute()
 {
-  RGWPutObjProcessor *processor = NULL;
+//  RGWPutObjProcessor *processor = NULL;
   char supplied_md5_bin[CEPH_CRYPTO_MD5_DIGESTSIZE + 1];
   char supplied_md5[CEPH_CRYPTO_MD5_DIGESTSIZE * 2 + 1];
   char calc_md5[CEPH_CRYPTO_MD5_DIGESTSIZE * 2 + 1];
@@ -1072,6 +1084,8 @@ void RGWPutObj::execute()
 
   bool need_calc_md5 = (obj_manifest == NULL);
   string full_path=""; 
+  int fd = -1;
+  int result = -1;
 #define BLOCK_SIZE          (4*1024)            /*  */
   char buf[BLOCK_SIZE+1];
 
@@ -1113,7 +1127,7 @@ void RGWPutObj::execute()
   if (!chunked_upload) { /* with chunked upload we don't know how big is the upload.
                             we also check sizes at the end anyway */
     ret = 0;//store->check_quota(s->bucket_owner.get_id(), s->bucket,
-                             user_quota, bucket_quota, s->content_length);
+//                             user_quota, bucket_quota, s->content_length);
     if (ret < 0) {
       ldout(s->cct, 20) << "check_quota() returned ret=" << ret << dendl;
       goto done;
@@ -1133,10 +1147,10 @@ void RGWPutObj::execute()
     goto done;
   }
   full_path += G.buckets_root + string("/") + s->bucket.name +string("/") + s->object.name;
-  if ((fd = ::open(full_path.c_str(), O_RDWR)) < 0)
+  if ((fd = ::open(full_path.c_str(), O_RDWR|O_CREAT|O_TRUNC)) < 0)
   {
       result = -1;
-      goto done_err;
+      goto done;//_err;
   }
   do {
     bufferlist data;
@@ -1196,11 +1210,13 @@ void RGWPutObj::execute()
     }
 #else
 
-    if ((result = ::pwrite(fd, bl.c_str(), len, ofs)) < 0)
+    if ((result = ::pwrite(fd, data.c_str(), len, ofs)) < 0)
     {
         goto done;
     }
-    bl.clear();
+    hash.Update((const byte *)data.c_str(), data.length());
+    
+    data.clear();
 #endif
     
     ofs += len;
@@ -1221,17 +1237,17 @@ void RGWPutObj::execute()
   }
 
   if (need_calc_md5) {
-#if 0
-      processor->complete_hash(&hash);
+#if 1
+//      processor->complete_hash(&hash);
     hash.Final(m);
 
     buf_to_hex(m, CEPH_CRYPTO_MD5_DIGESTSIZE, calc_md5);
     etag = calc_md5;
 
-    if (supplied_md5_b64 && strcmp(calc_md5, supplied_md5)) {
-      ret = -ERR_BAD_DIGEST;
-      goto done;
-    }
+//    if (supplied_md5_b64 && strcmp(calc_md5, supplied_md5)) {
+//      ret = -ERR_BAD_DIGEST;
+//      goto done;
+//    }
 #endif
   }
 
@@ -1286,6 +1302,7 @@ void RGWPutObj::execute()
   ret = processor->complete(etag, &mtime, 0, attrs, delete_at, if_match, if_nomatch);
 #endif
 done:
+  ;
 //  dispose_processor(processor);
 //  perfcounter->tinc(l_rgw_put_lat,
 //                   (ceph_clock_now(s->cct) - s->time));

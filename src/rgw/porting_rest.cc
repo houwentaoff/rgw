@@ -23,6 +23,7 @@
 #include "common/utf8.h"
 #include "common/Formatter.h"
 #include "rgw_http_errors.h"
+#include "global/global.h"
 
 #define CORS_MAX_AGE_INVALID ((uint32_t)-1)
 #define TIME_BUF_SIZE 128
