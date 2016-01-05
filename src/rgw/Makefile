@@ -26,7 +26,7 @@ LOCAL_LIBS 	 = ../librados/librados.a ../include/libinclude.a ../common/libcommo
 			    ../auth/libauth.a    \
 			   ../log/liblog.a ../msg/libmsg.a 
 
-LD = $(SYS_LIBS) -lcryptopp -pthread -lfcgi -lcurl -lexpat -lboost_thread -lboost_filesystem  -lboost_system -static-libstdc++
+LD = $(SYS_LIBS) -lcryptopp -lpthread -lfcgi -lcurl -lexpat -lboost_thread -lboost_filesystem  -lboost_system -static-libstdc++
 RGW_SERVER  := rgw
 TEST_RGW 	:= test_main
 

@@ -18,6 +18,23 @@
 
 using namespace librados;
 
+string escape_str(const string &str)
+{
+    int i = 0;
+    string ret;
+    
+    while (str[i]!='\0')
+    {
+        if (str[i] == ' ' || str[i] == '(' || str[i] == ')')
+        {
+            ret += '\\';
+        }
+        ret += str[i];
+        i++;
+    }
+    return ret;
+}
+
 static bool issue_bucket_list_op(librados::IoCtx& io_ctx,
     const string& oid, const cls_rgw_obj_key& start_obj, const string& filter_prefix,
     uint32_t num_entries, bool list_versions, BucketIndexAioManager *manager,
@@ -38,7 +55,7 @@ static bool issue_bucket_list_op(librados::IoCtx& io_ctx,
   char cmd_buf[512] = {0};
   
   sscanf(oid.c_str(), ".dir.%s", bucket_name);
-  sprintf(cmd_buf, "ls -1 %s/%s/%s", G.buckets_root.c_str(), bucket_name, filter_prefix.c_str());
+  sprintf(cmd_buf, "ls -1 \'%s/%s/%s\'", G.buckets_root.c_str(), bucket_name, filter_prefix.c_str());
   string files = shell_execute(cmd_buf);
   if (files == "")
   {
@@ -54,13 +71,17 @@ static bool issue_bucket_list_op(librados::IoCtx& io_ctx,
   char tmp[512];
   bool isDir = false;
 
-  sprintf(cmd_buf, "[ -d %s/%s/%s ]", G.buckets_root.c_str(), bucket_name, filter_prefix.c_str());
+  sprintf(cmd_buf, "[ -d \'%s/%s/%s\' ]", G.buckets_root.c_str(), bucket_name, filter_prefix.c_str());
   if (filter_prefix != "" /*filter_prefix.find("/") > 0 || */)
   {
     if (shell_simple(cmd_buf) == 0)
     {
       isDir = true;
       base_path += filter_prefix;
+      if (filter_prefix[filter_prefix.length()-1]!='/')
+      {
+        base_path += "/";  
+      }
     }
     else
     {

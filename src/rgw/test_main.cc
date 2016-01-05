@@ -65,6 +65,7 @@
 #include "global/global.h"
 #include "common/shell.h"
 
+#define _PATH_CONF      "/etc/rgw.conf"
 #define SOCKET_BACKLOG 1024
 
 #define RGW_THREAD_POOL_SIZE   G.rgw_thread_pool_size
@@ -652,7 +653,84 @@ done:
 
   return (ret < 0 ? ret : s->err.ret);
 }
+int strip_space(char *str)
+{
+    int len ;
+    if (!str)
+    {
+        return -1;
+    }
 
+    len = strlen(str);
+
+    while (str[len-1] == ' ')
+    {
+        str[len-1] = '\0';
+        len--;
+    }
+    return 0;
+}
+#if 0
+enum
+{
+    STR;
+    INT;    
+}data_type_e;
+struct 
+{
+    const char *name;
+    data_type_e  type;
+}map_t;
+
+map_t MAP = {
+    {"buckets_root", STR,}
+    {"rgw_max_chunk_size", INT,}
+};
+#endif
+int parse_conf(const char *path, void* obj, void (*cb)(void* obj, const char *name, const char *val))
+{
+    FILE *fp = NULL;
+    char buf [256]={0};
+    char var_name[256]={0};
+    char value[256]={0};
+    int r = -1;
+
+    if (!path)
+    {
+        goto err;
+    }
+
+    if (NULL == (fp = fopen(path, "r")))
+    {
+        goto err;
+    }
+
+    while ((r = fscanf(fp, "%[^\n]s", buf)) == 1)
+    {
+        sscanf(buf, "%s", var_name);
+        if (var_name[0] == '#')
+        {
+            if (fscanf(fp, "%*[\n]") < 0)
+            {
+                printf("skip # fail\n");
+                goto err;
+            }
+            continue;
+        }
+        if ((r = sscanf(buf, "%[^=]=%s", var_name, value))!=2)
+        {
+            goto err;
+        }
+        strip_space(var_name);
+        printf("name[%s] = [%s]\n", var_name, value);
+        cb(obj, var_name, value);
+        r = fscanf(fp, "%*[\n]");
+    }
+    return 0;
+err:
+    return -1;
+}
+typedef void (*FUNC)(void *obj, const char*, const char*);
 /* 
  * ===  FUNCTION  ======================================================================
  *         Name:  main
@@ -663,6 +741,7 @@ int main ( int argc, char *argv[] )
 {
     INIT_G(); 
     
+    /*default val*/
     G.logFileSize                   = _M(100);
     G.logFile.fd                    = STDOUT_FILENO;
     G.hostname                      = shell_execute("hostname");
@@ -671,6 +750,8 @@ int main ( int argc, char *argv[] )
     G.buckets_root                  = "/fisamba";
     G.rgw_max_chunk_size            = 4*1024*1024;
     G.rgw_max_put_size              = _G(1);
+    
+    parse_conf(_PATH_CONF, &G, (FUNC)(&G.set_global_params));
         
     ldout(0, 0)<<"hello world\n"<<dendl;
 //    check_curl();    

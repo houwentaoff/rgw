@@ -18,6 +18,9 @@
  */
 
 #include "global.h"
+#include <string>
+
+using namespace std;
 
 struct globals globals;
 struct globals *ptr_to_globals;
@@ -35,3 +38,33 @@ void globals::init()
     rgw_list_buckets_max_chunk = 0;
     rgw_relaxed_s3_bucket_names        = true;
 }
+void globals::set_global_params(void *obj, const char *name, const char *val)
+{
+    globals *pobj = (globals *)obj;
+    if (string(name) == "buckets_root")
+    {
+        pobj->buckets_root = val;
+    }
+    if (string(name) =="rgw_max_chunk_size")
+    {
+        pobj->rgw_max_chunk_size = atoi(val);
+    }
+    if (string(name) =="rgw_max_put_size")
+    {
+        pobj->rgw_max_put_size = atoi(val);
+    }
+    if (string(name) =="rgw_thread_pool_size")
+    {
+        pobj->rgw_thread_pool_size = atoi(val);
+    }
+    if (string(name) =="rgw_list_buckets_max_chunk")
+    {
+        pobj->rgw_list_buckets_max_chunk = atoi(val);
+    }
+    if (string(name) =="logFileSize")
+    {
+        pobj->logFileSize = atoi(val);
+    }
+    
+}
+

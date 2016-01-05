@@ -693,7 +693,10 @@ void RGWGetObj::execute()
   int fd = -1;
   size_t off = 0;
   int result = 0;
-    
+  unsigned char m[CEPH_CRYPTO_MD5_DIGESTSIZE];
+  char calc_md5[CEPH_CRYPTO_MD5_DIGESTSIZE * 2 + 1];  
+  MD5 hash;
+
   utime_t start_time = s->time;
   bufferlist bl;
   gc_invalidate_time = ceph_clock_now(s->cct);
@@ -782,7 +785,6 @@ void RGWGetObj::execute()
   new_end = end;
   left = st.st_size;
 
-
   //    int ret = -1;
   if ((fd = ::open(full_path.c_str(), O_RDONLY)) < 0)
   {
@@ -805,10 +807,17 @@ void RGWGetObj::execute()
       }
       bl.append(buf, BLOCK_SIZE);
 #endif
+      hash.Update((const byte *)bl.c_str(), bl.length());
       send_response_data(bl, 0, bl.length());
       bl.clear();
       left -= G.rgw_max_chunk_size;
   }  
+  hash.Final(m);
+  buf_to_hex(m, CEPH_CRYPTO_MD5_DIGESTSIZE, calc_md5);  
+  bl.clear();
+  bl.append(calc_md5, strlen(calc_md5));
+  attrs.insert(pair<string, bufferlist>(RGW_ATTR_ETAG, bl));
+  
 //  bl.append("hello this is test", strlen("hello this is test"));
  /* :TODO:End---  */
 #endif

@@ -45,6 +45,7 @@ typedef struct logFile_t{
 
 struct globals {
     void init();
+    static void set_global_params(void* obj, const char *name, const char *val);    
     /* log */
     logFile_t logFile;
     /* max size of file before rotation */ 
