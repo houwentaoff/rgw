@@ -38,7 +38,7 @@ static bool issue_bucket_list_op(librados::IoCtx& io_ctx,
   char cmd_buf[512] = {0};
   
   sscanf(oid.c_str(), ".dir.%s", bucket_name);
-  sprintf(cmd_buf, "ls %s/%s/%s", G.buckets_root.c_str(), bucket_name, filter_prefix.c_str());
+  sprintf(cmd_buf, "ls -1 %s/%s/%s", G.buckets_root.c_str(), bucket_name, filter_prefix.c_str());
   string files = shell_execute(cmd_buf);
   if (files == "")
   {
@@ -77,7 +77,7 @@ static bool issue_bucket_list_op(librados::IoCtx& io_ctx,
 
   for (; *pos!='\0'; pos += size)
   {
-    int r = sscanf(pos, "%s", file_name);
+    int r = sscanf(pos, "%[^\n]s", file_name);
     if (r!=1)
       break;
     size = strlen(file_name)+1;
