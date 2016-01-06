@@ -20,6 +20,8 @@
 #define __GLOBAL_H__
 
 #include <string.h>
+#include <sys/types.h>
+
 #include <string>
 
 #define _M(x)                   (x*(1024*1024))/*  x M bytes*/
@@ -74,6 +76,8 @@ struct globals {
     uint64_t rgw_max_chunk_size;
     /* nax s3cmd put size */
     long rgw_max_put_size;
+    /* server uid  default is 502*/
+    uid_t    server_uid;
 };
 
 #endif

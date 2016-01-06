@@ -37,6 +37,7 @@ void globals::init()
     rgw_thread_pool_size = 0;
     rgw_list_buckets_max_chunk = 0;
     rgw_relaxed_s3_bucket_names        = true;
+    server_uid           = 0;
 }
 void globals::set_global_params(void *obj, const char *name, const char *val)
 {
@@ -65,6 +66,9 @@ void globals::set_global_params(void *obj, const char *name, const char *val)
     {
         pobj->logFileSize = atoi(val);
     }
-    
+    if (string(name) =="server_uid")
+    {
+        pobj->server_uid = atoi(val);
+    }   
 }
 

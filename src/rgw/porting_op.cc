@@ -801,10 +801,13 @@ void RGWGetObj::execute()
   sprintf(md5_buf, "md5sum %s", full_path.c_str());
   md5_val = shell_execute(md5_buf);
   sscanf(md5_val.c_str(), "%s", md5_buf);
+  printf("md5_val.c_str() [%s] md5_buf [%s] \n", md5_val.c_str(), md5_buf);
   bl.clear();
   bl.append(md5_buf, strlen(md5_buf));
   attrs.insert(pair<string, bufferlist>(RGW_ATTR_ETAG, bl));
   bl.clear();
+  send_response_data(bl, 0, bl.length());
+  
   while (left > 0)
   {
 #if 1
@@ -831,7 +834,7 @@ void RGWGetObj::execute()
 //  bl.clear();
 //  bl.append(calc_md5, strlen(calc_md5));
 //  attrs.insert(pair<string, bufferlist>(RGW_ATTR_ETAG, bl));
-//  bl.clear();
+  bl.clear();
   
 //  bl.append("hello this is test", strlen("hello this is test"));
  /* :TODO:End---  */
@@ -1170,6 +1173,10 @@ void RGWPutObj::execute()
     ldout(s->cct, 20) << "processor->prepare() returned ret=" << ret << dendl;
     goto done;
   }
+  if (setuid(G.server_uid) == -1)
+  {
+      perror("set uid fail\n");
+  }
   full_path += G.buckets_root + string("/") + s->bucket.name +string("/") + s->object.name;
   if ((fd = ::open(full_path.c_str(), O_TRUNC|O_RDWR|O_CREAT/*|O_APPEND*/)) < 0)
   {
@@ -1233,7 +1240,7 @@ void RGWPutObj::execute()
       }
     }
 #else
-#if 0
+#if 1
     if ((result = ::pwrite(fd, data.c_str(), len, ofs)) < 0)
     {
         goto done;
