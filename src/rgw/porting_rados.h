@@ -27,6 +27,9 @@
 class RGWRados;
 struct RGWObjState;
 
+#define RGW_OBJ_NS_MULTIPART "multipart"
+#define RGW_OBJ_NS_SHADOW    "shadow"
+
 struct RGWObjectCtx {
   RGWRados *store;
   map<rgw_obj, RGWObjState> objs_state;

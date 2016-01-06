@@ -23,7 +23,7 @@ INCLUDES 		 =  -I../
 
 include ../lib.rules
 
-LIB_OBJS = 
+LIB_OBJS = Crypto.o
 
 MODULE_TARGETS = $(MODULE_LIBS)
 

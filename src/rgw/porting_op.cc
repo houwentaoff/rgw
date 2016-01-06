@@ -36,8 +36,14 @@
 #include "common/ceph_crypto.h"
 #include "global/global.h"
 
+#define MULTIPART_UPLOAD_ID_PREFIX_LEGACY "2/"
+#define MULTIPART_UPLOAD_ID_PREFIX "2~" // must contain a unique char that may not come up in gen_rand_alpha()
+
 using namespace std;
 using ceph::crypto::MD5;
+
+static string mp_ns = RGW_OBJ_NS_MULTIPART;
+static string shadow_ns = RGW_OBJ_NS_SHADOW;
 
 static int parse_range(const char *range, off_t& ofs, off_t& end, bool *partial_content)
 {
@@ -696,6 +702,8 @@ void RGWGetObj::execute()
   unsigned char m[CEPH_CRYPTO_MD5_DIGESTSIZE];
   char calc_md5[CEPH_CRYPTO_MD5_DIGESTSIZE * 2 + 1];  
   MD5 hash;
+  char md5_buf[512]={0};
+  string md5_val;
 
   utime_t start_time = s->time;
   bufferlist bl;
@@ -785,12 +793,18 @@ void RGWGetObj::execute()
   new_end = end;
   left = st.st_size;
 
-  //    int ret = -1;
   if ((fd = ::open(full_path.c_str(), O_RDONLY)) < 0)
   {
       result = -1;
       goto done_err;
   }
+  sprintf(md5_buf, "md5sum %s", full_path.c_str());
+  md5_val = shell_execute(md5_buf);
+  sscanf(md5_val.c_str(), "%s", md5_buf);
+  bl.clear();
+  bl.append(md5_buf, strlen(md5_buf));
+  attrs.insert(pair<string, bufferlist>(RGW_ATTR_ETAG, bl));
+  bl.clear();
   while (left > 0)
   {
 #if 1
@@ -807,16 +821,17 @@ void RGWGetObj::execute()
       }
       bl.append(buf, BLOCK_SIZE);
 #endif
-      hash.Update((const byte *)bl.c_str(), bl.length());
+//      hash.Update((const byte *)bl.c_str(), bl.length());
       send_response_data(bl, 0, bl.length());
       bl.clear();
       left -= G.rgw_max_chunk_size;
   }  
-  hash.Final(m);
-  buf_to_hex(m, CEPH_CRYPTO_MD5_DIGESTSIZE, calc_md5);  
-  bl.clear();
-  bl.append(calc_md5, strlen(calc_md5));
-  attrs.insert(pair<string, bufferlist>(RGW_ATTR_ETAG, bl));
+//  hash.Final(m);
+//  buf_to_hex(m, CEPH_CRYPTO_MD5_DIGESTSIZE, calc_md5);  
+//  bl.clear();
+//  bl.append(calc_md5, strlen(calc_md5));
+//  attrs.insert(pair<string, bufferlist>(RGW_ATTR_ETAG, bl));
+//  bl.clear();
   
 //  bl.append("hello this is test", strlen("hello this is test"));
  /* :TODO:End---  */
@@ -1156,7 +1171,7 @@ void RGWPutObj::execute()
     goto done;
   }
   full_path += G.buckets_root + string("/") + s->bucket.name +string("/") + s->object.name;
-  if ((fd = ::open(full_path.c_str(), O_RDWR|O_CREAT|O_TRUNC)) < 0)
+  if ((fd = ::open(full_path.c_str(), O_TRUNC|O_RDWR|O_CREAT/*|O_APPEND*/)) < 0)
   {
       result = -1;
       goto done;//_err;
@@ -1218,11 +1233,17 @@ void RGWPutObj::execute()
       }
     }
 #else
-
+#if 0
     if ((result = ::pwrite(fd, data.c_str(), len, ofs)) < 0)
     {
         goto done;
     }
+#else
+    if ((result = ::write(fd, data.c_str(), len)) < 0)
+    {
+        goto done;
+    }
+#endif
     hash.Update((const byte *)data.c_str(), data.length());
     
     data.clear();
@@ -1316,4 +1337,139 @@ done:
 //  perfcounter->tinc(l_rgw_put_lat,
 //                   (ceph_clock_now(s->cct) - s->time));
 }
+int RGWInitMultipart::verify_permission()
+{
+  if (!verify_bucket_permission(s, RGW_PERM_WRITE))
+    return -EACCES;
+
+  return 0;
+}
+
+void RGWInitMultipart::pre_exec()
+{
+  rgw_bucket_object_pre_exec(s);
+}
+
+void RGWInitMultipart::execute()
+{
+  bufferlist aclbl;
+  map<string, bufferlist> attrs;
+  rgw_obj obj;
+  map<string, string>::iterator iter;
+
+  if (get_params() < 0)
+    return;
+  ret = -EINVAL;
+  if (s->object.empty())
+    return;
+
+  policy.encode(aclbl);
+
+  attrs[RGW_ATTR_ACL] = aclbl;
+
+  for (iter = s->generic_attrs.begin(); iter != s->generic_attrs.end(); ++iter) {
+    bufferlist& attrbl = attrs[iter->first];
+    const string& val = iter->second;
+    attrbl.append(val.c_str(), val.size() + 1);
+  }
+
+//  rgw_get_request_metadata(s->cct, s->info, attrs);
+
+  do {
+    char buf[33];
+    gen_rand_alphanumeric(s->cct, buf, sizeof(buf) - 1);
+    upload_id = MULTIPART_UPLOAD_ID_PREFIX; /* v2 upload id */
+    upload_id.append(buf);
+
+    string tmp_obj_name;
+    RGWMPObj mp(s->object.name, upload_id);
+    tmp_obj_name = mp.get_meta();
+
+    obj.init_ns(s->bucket, tmp_obj_name, mp_ns);
+    // the meta object will be indexed with 0 size, we c
+    obj.set_in_extra_data(true);
+    obj.index_hash_source = s->object.name;
+
+    RGWRados::Object op_target(store, s->bucket_info, *static_cast<RGWObjectCtx *>(s->obj_ctx), obj);
+    op_target.set_versioning_disabled(true); /* no versioning for multipart meta */
+
+//    RGWRados::Object::Write obj_op(&op_target);
+
+//    obj_op.meta.owner = s->owner.get_id();
+//    obj_op.meta.category = RGW_OBJ_CATEGORY_MULTIMETA;
+//    obj_op.meta.flags = PUT_OBJ_CREATE_EXCL;
+
+    ret = 0;//obj_op.write_meta(0, attrs);
+  } while (ret == -EEXIST);
+#if 0
+  string full_path=""; 
+  int len;
+  MD5 hash;
+  int fd = -1;
+  int result = -1;
+  full_path += G.buckets_root + string("/") + s->bucket.name +string("/") + s->object.name;
+  if ((fd = ::open(full_path.c_str(), O_RDWR|O_CREAT|O_TRUNC)) < 0)
+  {
+      result = -1;
+      goto done;//_err;
+  }
+  ofs = 0;
+  do {
+    bufferlist data;
+    len = get_data(data);
+    if (len < 0) {
+      ret = len;
+      goto done;
+    }
+    if (!len)
+      break;
+    if ((result = ::pwrite(fd, data.c_str(), len, ofs)) < 0)
+    {
+        goto done;
+    }
+    hash.Update((const byte *)data.c_str(), data.length());
+    
+    data.clear();
+    ofs += len;
+  } while (len > 0);
+done:;
+#endif
+}
+#if 0
+int RGWInitMultipart::get_data(bufferlist& bl)
+{
+  size_t cl;
+  uint64_t chunk_size = G.rgw_max_chunk_size;
+  if (s->length) {
+    cl = atoll(s->length) - ofs;
+    if (cl > chunk_size)
+      cl = chunk_size;
+  } else {
+    cl = chunk_size;
+  }
+
+  int len = 0;
+  if (cl) {
+    bufferptr bp(cl);
+
+    int read_len; /* cio->read() expects int * */
+    int r = s->cio->read(bp.c_str(), cl, &read_len);
+    len = read_len;
+    if (r < 0)
+      return r;
+    bl.append(bp, 0, len);
+  }
+
+  if ((uint64_t)ofs + len > G.rgw_max_put_size) {
+    return -ERR_TOO_LARGE;
+  }
+
+  const char *supplied_md5_b64;
+
+  if (!ofs)
+    supplied_md5_b64 = s->info.env->get("HTTP_CONTENT_MD5");
+
+  return len;
+}
+#endif
 

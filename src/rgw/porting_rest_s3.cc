@@ -272,7 +272,7 @@ RGWOp *RGWHandler_ObjStore_Obj_S3::op_post()
     return NULL;//new RGWCompleteMultipart_ObjStore_S3;
 
   if (s->info.args.exists("uploads"))
-    return NULL;//new RGWInitMultipart_ObjStore_S3;
+    return new RGWInitMultipart_ObjStore_S3;
 
   return NULL;
 }
@@ -760,3 +760,34 @@ void RGWPutObj_ObjStore_S3::send_response()
   dump_errno(s);
   end_header(s, this);
 }
+
+int RGWInitMultipart_ObjStore_S3::get_params()
+{
+#if 0
+  RGWAccessControlPolicy_S3 s3policy(s->cct);
+  ret = create_s3_policy(s, store, s3policy, s->owner);
+  if (ret < 0)
+    return ret;
+
+  policy = s3policy;
+#endif
+  return 0;
+}
+void RGWInitMultipart_ObjStore_S3::send_response()
+{
+  if (ret)
+    set_req_state_err(s, ret);
+  dump_errno(s);
+  end_header(s, this, "application/xml");
+  if (ret == 0) { 
+    dump_start(s);
+    s->formatter->open_object_section_in_ns("InitiateMultipartUploadResult",
+		  "http://s3.amazonaws.com/doc/2006-03-01/");
+    s->formatter->dump_string("Bucket", s->bucket_name_str);
+    s->formatter->dump_string("Key", s->object.name);
+    s->formatter->dump_string("UploadId", upload_id);
+    s->formatter->close_section();
+    rgw_flush_formatter_and_reset(s, s->formatter);
+  }
+}
+

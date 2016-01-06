@@ -17,6 +17,8 @@
  * =====================================================================================
  */
 #include "porting_common.h"
+#include "auth/Crypto.h"
+
 class HexTable
 {
   char table[256];
@@ -518,5 +520,25 @@ string rgw_string_unquote(const string& s)
     return s;
 
   return s.substr(1, len - 2);
+}
+// this is basically a modified base64 charset, url friendly
+static const char alphanum_table[]="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+int gen_rand_alphanumeric(CephContext *cct, char *dest, int size) /* size should be the required string size + 1 */
+{
+  int ret = get_random_bytes(dest, size);
+  if (ret < 0) {
+    lderr(cct) << "cannot get random bytes: " /*<< cpp_strerror(-ret) */<< dendl;
+    return ret;
+  }
+
+  int i;
+  for (i=0; i<size - 1; i++) {
+    int pos = (unsigned)dest[i];
+    dest[i] = alphanum_table[pos & 63];
+  }
+  dest[i] = '\0';
+
+  return 0;
 }
 

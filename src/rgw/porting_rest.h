@@ -140,6 +140,12 @@ public:
   int get_data(bufferlist& bl);
 };
 
+class RGWInitMultipart_ObjStore : public RGWInitMultipart {
+public:
+  RGWInitMultipart_ObjStore() {}
+  ~RGWInitMultipart_ObjStore() {}
+};
+
 static const int64_t NO_CONTENT_LENGTH = -1;
 
 extern void set_req_state_err(struct req_state *s, int err_no);
