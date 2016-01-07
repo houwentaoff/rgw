@@ -803,7 +803,7 @@ void RGWGetObj::execute()
   sscanf(md5_val.c_str(), "%s", md5_buf);
   printf("md5_val.c_str() [%s] md5_buf [%s] \n", md5_val.c_str(), md5_buf);
   bl.clear();
-  bl.append(md5_buf, strlen(md5_buf));
+  bl.append(md5_buf, strlen(md5_buf)+1);
   attrs.insert(pair<string, bufferlist>(RGW_ATTR_ETAG, bl));
   bl.clear();
   send_response_data(bl, 0, bl.length());
@@ -1115,6 +1115,8 @@ void RGWPutObj::execute()
   int result = -1;
 #define BLOCK_SIZE          (4*1024)            /*  */
   char buf[BLOCK_SIZE+1];
+  uid_t new_uid,old_uid;
+  string name="";
 
 //  perfcounter->inc(l_rgw_put);
   ret = -EINVAL;
@@ -1173,10 +1175,11 @@ void RGWPutObj::execute()
     ldout(s->cct, 20) << "processor->prepare() returned ret=" << ret << dendl;
     goto done;
   }
-  if (setuid(G.server_uid) == -1)
-  {
-      perror("set uid fail\n");
-  }
+//  name = get_cur_username();
+
+  new_uid = getuid(name.c_str());
+  old_uid = drop_privs(new_uid);
+
   full_path += G.buckets_root + string("/") + s->bucket.name +string("/") + s->object.name;
   if ((fd = ::open(full_path.c_str(), O_TRUNC|O_RDWR|O_CREAT/*|O_APPEND*/)) < 0)
   {
@@ -1258,7 +1261,7 @@ void RGWPutObj::execute()
     
     ofs += len;
   } while (len > 0);
-
+  restore_privs(old_uid);
   if (!chunked_upload && ofs != s->content_length) {
     ret = -ERR_REQUEST_TIMEOUT;
     goto done;

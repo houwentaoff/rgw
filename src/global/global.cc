@@ -38,6 +38,8 @@ void globals::init()
     rgw_list_buckets_max_chunk = 0;
     rgw_relaxed_s3_bucket_names        = true;
     server_uid           = 0;
+    user_name            = "";
+    group_name           = "";
 }
 void globals::set_global_params(void *obj, const char *name, const char *val)
 {
@@ -70,5 +72,13 @@ void globals::set_global_params(void *obj, const char *name, const char *val)
     {
         pobj->server_uid = atoi(val);
     }   
+    if (string(name) =="user_name")
+    {
+        pobj->user_name = val;
+    }   
+    if (string(name) =="group_name")
+    {
+        pobj->group_name = val;
+    }       
 }
 

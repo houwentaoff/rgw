@@ -78,6 +78,9 @@ struct globals {
     long rgw_max_put_size;
     /* server uid  default is 502*/
     uid_t    server_uid;
+    /* default pw name*/
+    std::string user_name;
+    std::string group_name;
 };
 
 #endif

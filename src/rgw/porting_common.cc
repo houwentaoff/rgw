@@ -19,6 +19,12 @@
 #include "porting_common.h"
 #include "auth/Crypto.h"
 
+#include <unistd.h>
+#include <sys/types.h>
+#include <pwd.h>
+#include <sys/fsuid.h>
+#include "global/global.h"
+
 class HexTable
 {
   char table[256];
@@ -541,4 +547,42 @@ int gen_rand_alphanumeric(CephContext *cct, char *dest, int size) /* size should
 
   return 0;
 }
-
+#define FIGROUP		"_fics_"
+#if 0
+{
+    if (G.use_uid)
+    {
+        if (-1 == (new_uid = getuid(name)))
+        {
+            return -1;
+        }
+        drop_privs(new_uid);
+    }
+}
+#endif
+int getuid(const char *suffix_name)
+{
+    struct passwd *pwd;
+    string name;
+    if (string(suffix_name) == "")
+    {
+        name = G.user_name;
+    }
+    else
+    {
+        name = string(FIGROUP) + suffix_name;
+    }
+    if (NULL == (pwd = getpwnam(name.c_str())))
+    {
+        return -1;
+    }
+    return pwd->pw_uid;
+}
+int drop_privs(uid_t new_uid)
+{
+    return setfsuid(new_uid);
+}
+int restore_privs(uid_t old_uid)
+{
+    return setfsuid(old_uid);
+}

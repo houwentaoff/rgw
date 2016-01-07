@@ -24,6 +24,8 @@
 #include <map>
 #include <errno.h>
 #include <string.h>
+#include <unistd.h>
+
 #include "common/debug.h"
 #include "include/utime.h"
 #include "include/types.h"
@@ -1452,5 +1454,7 @@ extern int gen_rand_alphanumeric_lower(CephContext *cct, string *str, int length
  * to do the requested action */
 extern bool verify_bucket_permission(struct req_state *s, int perm);
 extern string rgw_string_unquote(const string& s);
-
+extern int drop_privs(uid_t new_uid);
+extern int restore_privs(uid_t old_uid);
+extern int getuid(const char *suffix_name);
 #endif
