@@ -18,6 +18,8 @@
  */
 
 #include "porting_rest_s3.h"
+#include "porting_user.h"
+#include "rgw_auth_s3.h"
 #include "global/global.h"
 
 struct response_attr_param {
@@ -66,13 +68,190 @@ int RGWHandler_Auth_S3::init(RGWRados *store, struct req_state *state, RGWClient
 
   return RGWHandler_ObjStore::init(store, state, cio);
 }
+static void init_anon_user(struct req_state *s)
+{
+//  rgw_get_anon_user(s->user);
+  s->perm_mask = RGW_PERM_FULL_CONTROL;
+}
 /*
  * verify that a signed request comes from the keyholder
  * by checking the signature against our locally-computed version
  */
 int RGW_Auth_S3::authorize(RGWRados *store, struct req_state *s)
 {
+  bool qsr = false;
+  string auth_id;
+  string auth_sign;
+
+  time_t now;
+  time(&now);
+
+#if 0
+  /* neither keystone and rados enabled; warn and exit! */
+  if (!store->ctx()->_conf->rgw_s3_auth_use_rados
+      && !store->ctx()->_conf->rgw_s3_auth_use_keystone) {
+    dout(0) << "WARNING: no authorization backend enabled! Users will never authenticate." << dendl;
+    return -EPERM;
+  }
+#endif
+  if (s->op == OP_OPTIONS) {
+    init_anon_user(s);
     return 0;
+  }
+
+  if (!s->http_auth || !(*s->http_auth)) {
+    auth_id = s->info.args.get("AWSAccessKeyId");
+    if (auth_id.size()) {
+      auth_sign = s->info.args.get("Signature");
+
+      string date = s->info.args.get("Expires");
+      time_t exp = atoll(date.c_str());
+      if (now >= exp)
+        return -EPERM;
+
+      qsr = true;
+    } else {
+      /* anonymous access */
+      init_anon_user(s);
+      return 0;
+    }
+  } else {
+    if (strncmp(s->http_auth, "AWS ", 4))
+      return -EINVAL;
+    string auth_str(s->http_auth + 4);
+    int pos = auth_str.rfind(':');
+    if (pos < 0)
+      return -EINVAL;
+
+    auth_id = auth_str.substr(0, pos);
+    auth_sign = auth_str.substr(pos + 1);
+  }
+  /* try keystone auth first */
+  int keystone_result = -EINVAL;
+#if 0
+  if (store->ctx()->_conf->rgw_s3_auth_use_keystone
+      && !store->ctx()->_conf->rgw_keystone_url.empty()) {
+    dout(20) << "s3 keystone: trying keystone auth" << dendl;
+
+    RGW_Auth_S3_Keystone_ValidateToken keystone_validator(store->ctx());
+    string token;
+
+    if (!rgw_create_s3_canonical_header(s->info, &s->header_time, token, qsr)) {
+        dout(10) << "failed to create auth header\n" << token << dendl;
+    } else {
+      keystone_result = keystone_validator.validate_s3token(auth_id, token, auth_sign);
+      if (keystone_result == 0) {
+	// Check for time skew first
+	time_t req_sec = s->header_time.sec();
+
+	if ((req_sec < now - RGW_AUTH_GRACE_MINS * 60 ||
+	     req_sec > now + RGW_AUTH_GRACE_MINS * 60) && !qsr) {
+	  dout(10) << "req_sec=" << req_sec << " now=" << now << "; now - RGW_AUTH_GRACE_MINS=" << now - RGW_AUTH_GRACE_MINS * 60 << "; now + RGW_AUTH_GRACE_MINS=" << now + RGW_AUTH_GRACE_MINS * 60 << dendl;
+	  dout(0) << "NOTICE: request time skew too big now=" << utime_t(now, 0) << " req_time=" << s->header_time << dendl;
+	  return -ERR_REQUEST_TIME_SKEWED;
+	}
+
+
+	s->user.user_id = keystone_validator.response.token.tenant.id;
+        s->user.display_name = keystone_validator.response.token.tenant.name; // wow.
+
+        /* try to store user if it not already exists */
+        if (rgw_get_user_info_by_uid(store, keystone_validator.response.token.tenant.id, s->user) < 0) {
+          int ret = rgw_store_user_info(store, s->user, NULL, NULL, 0, true);
+          if (ret < 0)
+            dout(10) << "NOTICE: failed to store new user's info: ret=" << ret << dendl;
+        }
+
+        s->perm_mask = RGW_PERM_FULL_CONTROL;
+      }
+    }
+  }
+#endif
+  /* keystone failed (or not enabled); check if we want to use rados backend */
+  if (!G.rgw_s3_auth_use_rados
+      && keystone_result < 0)
+    return keystone_result;
+
+  /* now try rados backend, but only if keystone did not succeed */
+  if (keystone_result < 0) {
+    /* get the user info */
+//    if (rgw_get_user_info_by_access_key(store, auth_id, s->user) < 0) {
+//      dout(5) << "error reading user info, uid=" << auth_id << " can't authenticate" << dendl;
+//      return -ERR_INVALID_ACCESS_KEY;
+//    }
+
+    /* now verify signature */
+
+    string auth_hdr;
+    if (!rgw_create_s3_canonical_header(s->info, &s->header_time, auth_hdr, qsr)) {
+      dout(10) << "failed to create auth header\n" << auth_hdr << dendl;
+      return -EPERM;
+    }
+    dout(10) << "auth_hdr:\n" << auth_hdr << dendl;
+
+    time_t req_sec = s->header_time.sec();
+    if ((req_sec < now - RGW_AUTH_GRACE_MINS * 60 ||
+        req_sec > now + RGW_AUTH_GRACE_MINS * 60) && !qsr) {
+      dout(10) << "req_sec=" << req_sec << " now=" << now << "; now - RGW_AUTH_GRACE_MINS=" << now - RGW_AUTH_GRACE_MINS * 60 << "; now + RGW_AUTH_GRACE_MINS=" << now + RGW_AUTH_GRACE_MINS * 60 << dendl;
+      dout(0) << "NOTICE: request time skew too big now=" << utime_t(now, 0) << " req_time=" << s->header_time << dendl;
+      return -ERR_REQUEST_TIME_SKEWED;
+    }
+    //get user info from mds: use fics RPC ? 尽可能使用rgw_user.cc 中的结构
+    map<string, RGWAccessKey>::iterator iter = s->user.access_keys.find(auth_id);
+    if (iter == s->user.access_keys.end()) {
+      dout(0) << "ERROR: access key not encoded in user info" << dendl;
+      return -EPERM;
+    }
+    RGWAccessKey& k = iter->second;
+
+    if (!k.subuser.empty()) {
+      map<string, RGWSubUser>::iterator uiter = s->user.subusers.find(k.subuser);
+      if (uiter == s->user.subusers.end()) {
+        dout(0) << "NOTICE: could not find subuser: " << k.subuser << dendl;
+        return -EPERM;
+      }
+      RGWSubUser& subuser = uiter->second;
+      s->perm_mask = subuser.perm_mask;
+    } else
+      s->perm_mask = RGW_PERM_FULL_CONTROL;
+
+    string digest;
+    int ret = rgw_get_s3_header_digest(auth_hdr, k.key, digest);
+    if (ret < 0) {
+      return -EPERM;
+    }
+
+    dout(15) << "calculated digest=" << digest << dendl;
+    dout(15) << "auth_sign=" << auth_sign << dendl;
+    dout(15) << "compare=" << auth_sign.compare(digest) << dendl;
+
+    if (auth_sign != digest) {
+      return -ERR_SIGNATURE_NO_MATCH;
+    }
+
+    if (s->user.system) {
+      s->system_request = true;
+      dout(20) << "system request" << dendl;
+      s->info.args.set_system();
+      string effective_uid = s->info.args.get(RGW_SYS_PARAM_PREFIX "uid");
+      RGWUserInfo effective_user;
+      if (!effective_uid.empty()) {
+        ret = 0;//rgw_get_user_info_by_uid(store, effective_uid, effective_user);
+        if (ret < 0) {
+          ldout(s->cct, 0) << "User lookup failed!" << dendl;
+          return -ENOENT;
+        }
+        s->user = effective_user;
+      }
+    }
+
+  } /* if keystone_result < 0 */
+
+  // populate the owner info
+//  s->owner.set_id(s->user.user_id);
+//  s->owner.set_name(s->user.display_name);
+
+  return 0;
 }
 int RGWHandler_ObjStore_S3::validate_bucket_name(const string& bucket, bool relaxed_names)
 {

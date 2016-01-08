@@ -23,6 +23,8 @@
 #include "porting_rest.h"
 #include "porting_op.h"
 
+#define RGW_AUTH_GRACE_MINS 15
+
 class RGWGetObj_ObjStore_S3 : public RGWGetObj_ObjStore
 {
 public:

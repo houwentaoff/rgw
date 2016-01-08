@@ -1,0 +1,10 @@
+--- fcgi-2.4.1-SNAP-0311112127/libfcgi/fcgio.cpp	2003-06-22 08:51:27.000000000 +0800
++++ fcgi/libfcgi/fcgio.cpp	2016-01-04 14:19:14.008702721 +0800
+@@ -23,6 +23,7 @@
+ #endif
+ 
+ #include <limits.h>
++#include <stdio.h>
+ #include "fcgio.h"
+ 
+ using std::streambuf;

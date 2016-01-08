@@ -81,6 +81,7 @@ struct globals {
     /* default pw name*/
     std::string user_name;
     std::string group_name;
+    bool rgw_s3_auth_use_rados;
 };
 
 #endif

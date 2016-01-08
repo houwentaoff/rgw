@@ -26,6 +26,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "common/ceph_crypto.h"
 #include "common/debug.h"
 #include "include/utime.h"
 #include "include/types.h"
@@ -40,6 +41,11 @@
 #include "include/rados/librados.hh"
 
 using namespace std;
+
+namespace ceph {
+  class Formatter;
+}
+using ceph::crypto::MD5;
 
 #define RGW_ATTR_PREFIX  "user.rgw."
 
@@ -1457,4 +1463,10 @@ extern string rgw_string_unquote(const string& s);
 extern int drop_privs(uid_t new_uid);
 extern int restore_privs(uid_t old_uid);
 extern int getuid(const char *suffix_name);
+
+
+extern void calc_hmac_sha1(const char *key, int key_len,
+                          const char *msg, int msg_len, char *dest);
+/* destination should be CEPH_CRYPTO_HMACSHA1_DIGESTSIZE bytes long */
+extern bool parse_rfc2616(const char *s, struct tm *t);
 #endif

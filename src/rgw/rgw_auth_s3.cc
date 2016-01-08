@@ -2,7 +2,8 @@
 // vim: ts=8 sw=2 smarttab
 
 #include "common/armor.h"
-#include "rgw_common.h"
+#include "porting_common.h"
+#include "common/ceph_crypto.h"
 
 #define dout_subsys ceph_subsys_rgw
 

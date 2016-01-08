@@ -18,6 +18,7 @@
  */
 #include "porting_common.h"
 #include "auth/Crypto.h"
+#include "common/ceph_crypto.h"
 
 #include <unistd.h>
 #include <sys/types.h>
@@ -585,4 +586,17 @@ int drop_privs(uid_t new_uid)
 int restore_privs(uid_t old_uid)
 {
     return setfsuid(old_uid);
+}
+
+/*
+ * calculate the sha1 value of a given msg and key
+ */
+void calc_hmac_sha1(const char *key, int key_len,
+                    const char *msg, int msg_len, char *dest)
+/* destination should be CEPH_CRYPTO_HMACSHA1_DIGESTSIZE bytes long */
+{
+  using namespace ceph::crypto;
+  HMACSHA1 hmac((const unsigned char *)key, key_len);
+  hmac.Update((const unsigned char *)msg, msg_len);
+  hmac.Final((unsigned char *)dest);
 }

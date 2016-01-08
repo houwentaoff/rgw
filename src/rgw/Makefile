@@ -36,7 +36,8 @@ all:$(RGW_SERVER)
 
 RGW_OBJS  	  =  rgw_env.o rgw_fcgi.o rgw_client_io.o rgw_common.o \
 			     rgw_op.o rgw_rest.o  rgw_rest_s3.o rgw_main.o 
-TEST_OBJS 	  = porting_tools.o porting_rados.o porting_json_enc.o \
+TEST_OBJS 	  = \
+				rgw_auth_s3.o porting_tools.o porting_rados.o porting_json_enc.o \
 				porting_bucket.o porting_acl_s3.o porting_xml.o porting_acl.o \
 				test_main.o porting_env.o rgw_client_io.o rgw_fcgi.o \
                 porting_rest.o porting_rest_bucket.o\

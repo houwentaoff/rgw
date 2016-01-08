@@ -5,7 +5,7 @@
 #define CEPH_RGW_AUTH_S3_H
 
 
-#include "rgw_common.h"
+#include "porting_common.h"
 
 void rgw_create_s3_canonical_header(const char *method, const char *content_md5, const char *content_type, const char *date,
                             map<string, string>& meta_map, const char *request_uri, map<string, string>& sub_resources,

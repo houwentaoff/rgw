@@ -40,6 +40,7 @@ void globals::init()
     server_uid           = 0;
     user_name            = "";
     group_name           = "";
+    rgw_s3_auth_use_rados   = false;
 }
 void globals::set_global_params(void *obj, const char *name, const char *val)
 {
@@ -80,5 +81,9 @@ void globals::set_global_params(void *obj, const char *name, const char *val)
     {
         pobj->group_name = val;
     }       
+    if (string(name) =="rgw_s3_auth_use_rados")
+    {
+        pobj->rgw_s3_auth_use_rados = atoi(val) == 1 ? true :false;
+    }           
 }
 
