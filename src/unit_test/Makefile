@@ -17,7 +17,12 @@ default:all
 
 MODULE_NAME := unit_test
 
-INCLUDES 	 = -I../
+S3_TOP       = ../../
+
+SDK_TOP      = $(S3_TOP)../../
+
+INCLUDES 	 = -I../ -I$(S3_TOP)../web/ -I$(SDK_TOP)/code/include_com -I$(S3_TOP)../web/web_include \
+			   -I$(S3_TOP)../web/Json/include
 
 include ../lib.rules
 
@@ -26,9 +31,14 @@ include ../lib.rules
 			    ../auth/libauth.a    \
 			   ../log/liblog.a ../msg/libmsg.a 
 
-LD = $(SYS_LIBS) -pthread -lfcgi -lcurl
+LD = $(SYS_LIBS) -lpthread -lfcgi -lcurl
+
+LD_FICS = -L$(SDK_TOP)/bin/libs -lJson -lFicsJNI -lcomutility -lficsnet -lfiOsd -ljournal \
+		  -lprtmds -lfistate -lficsNetSyn -lzookeeper_mt
 
 TEST_FCGI 	:= test_fcgi.fcgi
+
+TEST_GET_USERS := test_getuserinf
 
 all:ECHO_BUILD $(TEST_FCGI) 
 
@@ -37,8 +47,13 @@ ECHO_BUILD:
 
 TEST_FCGI_OBJS 	  =  test_fcgi.o
 
+TEST_GET_USERS_OBJS    =  test_getuserinf.o
+
 $(TEST_FCGI): $(TEST_FCGI_OBJS) 
-		$(CXX) $^ -o $@ $(LD)
+		$(CXX) $^ -o $@ 
+
+$(TEST_GET_USERS): $(TEST_GET_USERS_OBJS)
+		$(CXX) $^ -o $@ $(LD_FICS)
 
 .PHONY:clean
 
