@@ -440,8 +440,9 @@ int RGWREST::preprocess(struct req_state *s, RGWClientIO *cio)
     s->expect_cont = (expect && !strcasecmp(expect, "100-continue"));
   }
   s->op = op_from_method(info.method);
-
-//  info.init_meta_info(&s->has_bad_meta);
+ /* :TODO:2016/1/11 18:23:32:hwt:  x_meta_map 用户签名验证 需要，标准http date请求不用，aws需要用*/
+  info.init_meta_info(&s->has_bad_meta);
+ /* :TODO:End---  */
 
   return 0;
 }

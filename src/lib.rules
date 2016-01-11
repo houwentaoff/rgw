@@ -18,7 +18,7 @@ CXX                      =   g++ -std=c++11
 
 #CC                      =   arm-goke-linux-gnueabi-gcc
 #INCLUDES               +=   -I$(SDK_TOP)/legacy/build/include
-COMPILE_OPTS             =   $(INCLUDES)   # -I. -DSOCKLEN_T=socklen_t -D_LARGEFILE_SOURCE=1 -D_FILE_OFFSET_BITS=64
+COMPILE_OPTS             =   $(INCLUDES)  $(MACRO) # -I. -DSOCKLEN_T=socklen_t -D_LARGEFILE_SOURCE=1 -D_FILE_OFFSET_BITS=64
 CPLUSPLUS_FLAGS          =   $(COMPILE_OPTS) # -DBSD=1 -g -O2 -fpermissive
 C_FLAGS                  =   $(INCLUDES)
 #SYS_LIBS                =   -L/opt/goke/ct/4.6.1/usr/arm-goke-linux-gnueabi/sysroot/lib/

@@ -27,14 +27,14 @@ typedef enum
 }cgw_msg_id_t;
 
 //cgw server use
-void listen_loop(void* arg);
-void main_loop(void* arg);
+void *listen_loop(void* arg);
+void *main_loop(void* arg);
 typedef struct {
     int (*getpawd)(char *user, int sock_fd, ssize_t (*complete)(int fd, const void *buf, size_t count));
 }cgw_api_t;
 //cgw client use
-int post_msg(int msg_id, char payload[], int payload_size, bool close);
-int recv_msg(int fd, char *msg,  bool close);
+int post_msg(int msg_id, const char payload[], int payload_size, bool bclose);
+int recv_msg(int fd, char *msg,  bool bclose);
 
 
 

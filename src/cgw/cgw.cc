@@ -33,6 +33,9 @@
 #include <semaphore.h>
 #include <sys/time.h>
 #include <unistd.h>
+#include <sys/un.h>
+
+#include "cgw.h"
 
 #define CMD_SERVICE  "/tmp/cmd_server"
 #define MSG_QUEUE_SIZE        10
@@ -54,7 +57,7 @@ cgw_api_t cgw_ops;// =
 
 int com_id_exit_flag = 0;
 int id_exit_flag = 0;
-img_msg_t msg[MSG_QUEUE_SIZE];
+cgw_msg_t msg[MSG_QUEUE_SIZE];
 int msg_update;
 
 struct sockaddr_un clt_addr, srv_addr;
@@ -89,17 +92,17 @@ int listen_socket()
 
     return listen_fd;
 }
-int recv_msg(int fd, char *msg, bool close)
+int recv_msg(int fd, char *msg, bool bclose)
 {
     int num;
     socklen_t len;
     len = sizeof(clt_addr);
     num = read(fd, msg, CGW_MSG_SIZE+sizeof(int));
-    if (close)
+    if (bclose)
         close(fd);
     return num;
 }
-int receive_msg(int fd, char *msg, int *cli_fd, bool close)
+int receive_msg(int fd, char *msg, int *cli_fd, bool bclose)
 {
     int com_fd, num;
     socklen_t len;
@@ -112,16 +115,16 @@ int receive_msg(int fd, char *msg, int *cli_fd, bool close)
         close(com_fd);
         return -1;
     }
-
+    *cli_fd = com_fd; 
     num = read(com_fd, msg, CGW_MSG_SIZE+sizeof(int));
     
-    if (close)
+    if (bclose)
         close(com_fd);
 
     return num;
 }
 
-void listen_loop(void* arg)
+void *listen_loop(void* arg)
 {
     int fd, num, com_fd;
     char buffer[CGW_MSG_SIZE+sizeof(int)];
@@ -131,9 +134,9 @@ void listen_loop(void* arg)
         printf("Incorrect socket fd!\n");
 //        listen_loop_error_exit = 1;
 //        sem_post(&img_sem);
-        return ;
+        return NULL;
     }
-    listen_loop_error_exit = 0;
+//    listen_loop_error_exit = 0;
 //    sem_post(&img_sem);
     while (!com_id_exit_flag) {
         if(msg_update >MSG_QUEUE_SIZE-1)
@@ -145,15 +148,15 @@ void listen_loop(void* arg)
         if (num > 0) {
             pthread_mutex_lock(&msg_mutex);
             msg_update++;
-            msg[msg_update-1].msg_id = *(int *)&buffer[0];
-            msg[msg_update-1].sock_fd = com_fd;
+            msg[msg_update-1].msg_id = (cgw_msg_id_t)*(int *)&buffer[0];
             memcpy(msg[msg_update-1].param, &buffer[sizeof(int)], num);
+            msg[msg_update-1].sock_fd = com_fd;
         //    printf("accept %d\n", msg_update);
             pthread_mutex_unlock(&msg_mutex);
         }
     }
     close(fd);
-    return;
+    return NULL;
 }
 int cgw_msg_handler(cgw_msg_t *p_msg, cgw_api_t *p_cgw_api)
 {
@@ -168,7 +171,7 @@ int cgw_msg_handler(cgw_msg_t *p_msg, cgw_api_t *p_cgw_api)
     }
     return 0;
 }
-void main_loop(void* arg)
+void *main_loop(void* arg)
 {
     int count;
     while(!id_exit_flag) 
@@ -186,8 +189,9 @@ void main_loop(void* arg)
         }
         
     }
+    return NULL;
 }
-int post_msg(int msg_id, char payload[], int payload_size, bool close)
+int post_msg(int msg_id, const char payload[], int payload_size, bool bclose)
 {
     int connect_fd, ret;
     char buffer[sizeof(int) + CGW_MSG_SIZE];
@@ -202,7 +206,7 @@ int post_msg(int msg_id, char payload[], int payload_size, bool close)
     }
 
     srv_addr.sun_family = AF_UNIX;
-    strcpy((char*)&srv_addr.sun_path, CGW_SERVICE);
+    strcpy((char*)&srv_addr.sun_path, CMD_SERVICE);
     ret = connect(connect_fd,(struct sockaddr*)&srv_addr,sizeof(srv_addr));
 
     if(ret == -1){
@@ -213,9 +217,9 @@ int post_msg(int msg_id, char payload[], int payload_size, bool close)
     memcpy(&buffer[sizeof(int)], payload, payload_size);
     write(connect_fd, buffer, payload_size+sizeof(int));
     
-    if (close)
+    if (bclose)
         close(connect_fd);
-    return 0;
+    return connect_fd;
 }
 
 

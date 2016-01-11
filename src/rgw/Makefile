@@ -13,15 +13,23 @@
 # 
 # ###############################################
 
+#PLATFORM = FICS
+PLATFORM = UNIX
+
 default:test_main
 
 MODULE_NAME := rgw
+
+ifeq ($(PLATFORM), FICS)
+MACRO = -DFICS
+endif
 
 INCLUDES 	 = -I../
 
 include ../lib.rules
 
-LOCAL_LIBS 	 = ../auth/libauth.a ../librados/librados.a ../include/libinclude.a ../common/libcommon.a \
+LOCAL_LIBS 	 = ../cgw/libcgw.a ../auth/libauth.a \
+			   ../librados/librados.a ../include/libinclude.a ../common/libcommon.a \
 			   ../json_spirit/libjson_spirit.a ../cls/libcls.a ../global/libglobal.a #../include/libinclude.a \
 			    ../auth/libauth.a    \
 			   ../log/liblog.a ../msg/libmsg.a 

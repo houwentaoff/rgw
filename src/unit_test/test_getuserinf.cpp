@@ -41,15 +41,21 @@ extern cgw_api_t cgw_ops;
 int getpawd(char *user, int sock_fd, ssize_t (*complete)(int, const void *, size_t))
 {
     vector<WebUserInfo>::iterator itr;
+    bool exist = false;
 
     for (itr = g_vUserInfo.begin(); itr!=g_vUserInfo.end(); itr++)
     {
         if (itr->strName == user)
         {
             complete(sock_fd, (void *)itr->strPassword.c_str(), itr->strPassword.size());
+            exist = true;
             break;
         }
         printf("user:[%s]passwd[%s]\n", itr->strName.c_str(), itr->strPassword.c_str()); 
+    }
+    if (!exist)
+    {
+        complete(sock_fd, (void *)"", 1);
     }
     return 0;
 }
@@ -77,17 +83,17 @@ int main ( int argc, char *argv[] )
 //    Fi_RefreshUserInfo();
 	if (pthread_attr_init(&attr[0]) < 0)
 	{
-		ut_err("set attr fail\n");
+		printf("set attr fail\n");
 	}
 	if (pthread_attr_init(&attr[1]) < 0)
 	{
-		ut_err("set attr fail\n");
+		printf("set attr fail\n");
 	}
 	pthread_attr_setdetachstate(&attr[0], PTHREAD_CREATE_DETACHED);
 	pthread_attr_setdetachstate(&attr[1], PTHREAD_CREATE_DETACHED);
     
-    pthread_create(&id, &attr[0], (void*)main_loop, NULL);    
-    pthread_create(&com_id, &attr[1], (void*)listen_loop, NULL);
+    pthread_create(&id, &attr[0], main_loop, NULL);    
+    pthread_create(&com_id, &attr[1], listen_loop, NULL);
     do
     {
         for (itr = g_vUserInfo.begin(); itr!=g_vUserInfo.end(); itr++)

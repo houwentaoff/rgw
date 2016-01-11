@@ -17,9 +17,12 @@
  * =====================================================================================
  */
 
+#include <shadow.h>
+
 #include "porting_rest_s3.h"
 #include "porting_user.h"
 #include "rgw_auth_s3.h"
+#include "cgw/cgw.h"
 #include "global/global.h"
 
 struct response_attr_param {
@@ -197,13 +200,45 @@ int RGW_Auth_S3::authorize(RGWRados *store, struct req_state *s)
       return -ERR_REQUEST_TIME_SKEWED;
     }
     //get user info from mds: use fics RPC ? 尽可能使用rgw_user.cc 中的结构
+#if 0
     map<string, RGWAccessKey>::iterator iter = s->user.access_keys.find(auth_id);
     if (iter == s->user.access_keys.end()) {
       dout(0) << "ERROR: access key not encoded in user info" << dendl;
       return -EPERM;
     }
     RGWAccessKey& k = iter->second;
-
+#else
+    RGWAccessKey k ;//= iter->second;
+    k.id = auth_id;
+#ifdef FICS
+    int con_fd;
+    char key_buf[256];
+    con_fd = post_msg(CGW_MSG_GET_PASSWORD, auth_id.c_str(), auth_id.size(), false);
+    if (0 == recv_msg(con_fd, key_buf, true))
+    {
+        //not found
+        dout(0) << "ERROR: access key not encoded in user info" << dendl;
+        return -EPERM;
+    }
+    else
+    {
+        k.key = key_buf;
+    }
+#else
+    struct spwd *sp;
+    sp = getspnam(auth_id.c_str());
+    if (!sp)
+    {
+        //not found
+        dout(0) << "ERROR: access key not encoded in user info" << dendl;
+        return -EPERM;
+    }
+    else
+    {
+        k.key  =  "8888";//sp->sp_pwdp;
+    }
+#endif
+#endif
     if (!k.subuser.empty()) {
       map<string, RGWSubUser>::iterator uiter = s->user.subusers.find(k.subuser);
       if (uiter == s->user.subusers.end()) {

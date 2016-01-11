@@ -15,53 +15,25 @@
 
 default:all
 
-MODULE_NAME := unit_test
+MODULE_NAME := cgw
 
-S3_TOP       = ../../
+MODULE_LIBS 	 =  lib$(MODULE_NAME).a
 
-SDK_TOP      = $(S3_TOP)../../
-
-INCLUDES 	 = -I../ -I$(S3_TOP)../web/ -I$(SDK_TOP)/code/include_com -I$(S3_TOP)../web/web_include \
-			   -I$(S3_TOP)../web/Json/include
+INCLUDES 	 = -I../
 
 include ../lib.rules
 
-#LOCAL_LIBS 	 = ../include/libinclude.a ../common/libcommon.a ../json_spirit/libjson_spirit.a \
-			   ../cls/libcls.a #../global/libglobal.a ../include/libinclude.a \
-			    ../auth/libauth.a    \
-			   ../log/liblog.a ../msg/libmsg.a 
+LIB_OBJS 		 = cgw.o
 
-LD = $(SYS_LIBS) -lpthread -lfcgi -lcurl
+MODULE_TARGETS = $(MODULE_LIBS)
 
-LD_FICS = -L$(SDK_TOP)/bin/libs -lJson -lFicsJNI -lcomutility -lficsnet -lfiOsd -ljournal \
-		  -lprtmds -lfistate -lficsNetSyn -lzookeeper_mt
+all:$(MODULE_TARGETS)
 
-TEST_FCGI 	:= test_fcgi.fcgi
-
-TEST_GET_USERS := test_getuserinf
-
-all:ECHO_BUILD $(TEST_FCGI) 
-
-ECHO_BUILD:
-	@echo -e "\033[5;41;32m Building $(MODULE_NAME) ... \033[0m"
-
-TEST_FCGI_OBJS 	  =  test_fcgi.o
-
-TEST_GET_USERS_OBJS    =  test_getuserinf.o
-
-SER_MANAGER_OBJS       = ser_manager.o
-
-$(TEST_FCGI): $(TEST_FCGI_OBJS) 
-		$(CXX) $^ -o $@ 
-
-$(TEST_GET_USERS): $(TEST_GET_USERS_OBJS)
-		$(CXX) $^ -o $@ $(LD_FICS)
-
-$(SER_MANAGER): $(SER_MANAGER_OBJS)
-		$(CXX) $^ -o $@ 
+$(MODULE_LIBS): $(LIB_OBJS)	
+	@$(AR) rucs $@ $^
 
 .PHONY:clean
 
 clean:
 	-@echo -e "\033[5;41;32m Cleaning $(MODULE_NAME) ... \033[0m"
-	-$(RM) *.o  $(TEST_FCGI_OBJS) $(TEST_FCGI)
+	-$(RM) *.o $(MODULE_TARGETS) $(LIB_OBJS)

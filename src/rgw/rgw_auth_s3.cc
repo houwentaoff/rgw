@@ -212,6 +212,5 @@ bool rgw_create_s3_canonical_header(req_info& info, utime_t *header_time, string
   rgw_create_s3_canonical_header(info.method, content_md5, content_type, date.c_str(),
                             meta_map, request_uri.c_str(), sub_resources,
                             dest);
-
   return true;
 }

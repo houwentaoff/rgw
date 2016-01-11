@@ -26,7 +26,7 @@ INCLUDES 	 = -I../ -I$(S3_TOP)../web/ -I$(SDK_TOP)/code/include_com -I$(S3_TOP).
 
 include ../lib.rules
 
-#LOCAL_LIBS 	 = ../include/libinclude.a ../common/libcommon.a ../json_spirit/libjson_spirit.a \
+LOCAL_LIBS 	 = ../cgw/libcgw.a #../include/libinclude.a ../common/libcommon.a ../json_spirit/libjson_spirit.a \
 			   ../cls/libcls.a #../global/libglobal.a ../include/libinclude.a \
 			    ../auth/libauth.a    \
 			   ../log/liblog.a ../msg/libmsg.a 
@@ -54,7 +54,7 @@ SER_MANAGER_OBJS       = ser_manager.o
 $(TEST_FCGI): $(TEST_FCGI_OBJS) 
 		$(CXX) $^ -o $@ 
 
-$(TEST_GET_USERS): $(TEST_GET_USERS_OBJS)
+$(TEST_GET_USERS): $(TEST_GET_USERS_OBJS) $(LOCAL_LIBS)
 		$(CXX) $^ -o $@ $(LD_FICS)
 
 $(SER_MANAGER): $(SER_MANAGER_OBJS)
