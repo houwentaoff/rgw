@@ -28,11 +28,164 @@
 #define CORS_MAX_AGE_INVALID ((uint32_t)-1)
 #define TIME_BUF_SIZE 128
 
+struct rgw_http_attr {
+  const char *rgw_attr;
+  const char *http_attr;
+};
+/*
+ * mapping between rgw object attrs and output http fields
+ */
+static const struct rgw_http_attr base_rgw_to_http_attrs[] = {
+  { RGW_ATTR_CONTENT_LANG,      "Content-Language" },
+  { RGW_ATTR_EXPIRES,           "Expires" },
+  { RGW_ATTR_CACHE_CONTROL,     "Cache-Control" },
+  { RGW_ATTR_CONTENT_DISP,      "Content-Disposition" },
+  { RGW_ATTR_CONTENT_ENC,       "Content-Encoding" },
+  { RGW_ATTR_USER_MANIFEST,     "X-Object-Manifest" },
+};
+
+struct generic_attr {
+  const char *http_header;
+  const char *rgw_attr;
+};
+
+/*
+ * mapping between http env fields and rgw object attrs
+ */
+static const struct generic_attr generic_attrs[] = {
+  { "CONTENT_TYPE",             RGW_ATTR_CONTENT_TYPE },
+  { "HTTP_CONTENT_LANGUAGE",    RGW_ATTR_CONTENT_LANG },
+  { "HTTP_EXPIRES",             RGW_ATTR_EXPIRES },
+  { "HTTP_CACHE_CONTROL",       RGW_ATTR_CACHE_CONTROL },
+  { "HTTP_CONTENT_DISPOSITION", RGW_ATTR_CONTENT_DISP },
+  { "HTTP_CONTENT_ENCODING",    RGW_ATTR_CONTENT_ENC },
+};
+
 /* avoid duplicate hostnames in hostnames list */
 static set<string> hostnames_set;
 static map<string, string> generic_attrs_map;
 map<int, const char *> http_status_names;
 map<string, string> rgw_to_http_attrs;
+
+/*
+ * make attrs look_like_this
+ * converts dashes to underscores
+ */
+string lowercase_underscore_http_attr(const string& orig)
+{
+  const char *s = orig.c_str();
+  char buf[orig.size() + 1];
+  buf[orig.size()] = '\0';
+
+  for (size_t i = 0; i < orig.size(); ++i, ++s) {
+    switch (*s) {
+      case '-':
+        buf[i] = '_';
+        break;
+      default:
+        buf[i] = tolower(*s);
+    }
+  }
+  return string(buf);
+}
+
+/*
+ * make attrs LOOK_LIKE_THIS
+ * converts dashes to underscores
+ */
+string uppercase_underscore_http_attr(const string& orig)
+{
+  const char *s = orig.c_str();
+  char buf[orig.size() + 1];
+  buf[orig.size()] = '\0';
+
+  for (size_t i = 0; i < orig.size(); ++i, ++s) {
+    switch (*s) {
+      case '-':
+        buf[i] = '_';
+        break;
+      default:
+        buf[i] = toupper(*s);
+    }
+  }
+  return string(buf);
+}
+
+/*
+ * make attrs Look-Like-This
+ * converts underscores to dashes
+ */
+string camelcase_dash_http_attr(const string& orig)
+{
+  const char *s = orig.c_str();
+  char buf[orig.size() + 1];
+  buf[orig.size()] = '\0';
+
+  bool last_sep = true;
+
+  for (size_t i = 0; i < orig.size(); ++i, ++s) {
+    switch (*s) {
+      case '_':
+      case '-':
+        buf[i] = '-';
+        last_sep = true;
+        break;
+      default:
+        if (last_sep) {
+          buf[i] = toupper(*s);
+        } else {
+          buf[i] = tolower(*s);
+        }
+        last_sep = false;
+    }
+  }
+  return string(buf);
+}
+
+void rgw_rest_init(CephContext *cct, void *region/*RGWRegion& region*/)
+{
+  for (const auto& rgw2http : base_rgw_to_http_attrs)  {
+    rgw_to_http_attrs[rgw2http.rgw_attr] = rgw2http.http_attr;
+  }
+
+  for (const auto& http2rgw : generic_attrs) {
+    generic_attrs_map[http2rgw.http_header] = http2rgw.rgw_attr;
+  }
+
+  list<string> extended_http_attrs;
+//  get_str_list(cct->_conf->rgw_extended_http_attrs, extended_http_attrs);
+
+  list<string>::iterator iter;
+  for (iter = extended_http_attrs.begin(); iter != extended_http_attrs.end(); ++iter) {
+    string rgw_attr = RGW_ATTR_PREFIX;
+    rgw_attr.append(lowercase_underscore_http_attr(*iter));
+
+    rgw_to_http_attrs[rgw_attr] = camelcase_dash_http_attr(*iter);
+
+    string http_header = "HTTP_";
+    http_header.append(uppercase_underscore_http_attr(*iter));
+
+    generic_attrs_map[http_header] = rgw_attr;
+  }
+
+  for (const struct rgw_http_status_code *h = http_codes; h->code; h++) {
+    http_status_names[h->code] = h->name;
+  }
+
+//  if (!cct->_conf->rgw_dns_name.empty()) {
+//    hostnames_set.insert(cct->_conf->rgw_dns_name);
+//  }
+//  hostnames_set.insert(region.hostnames.begin(),  region.hostnames.end());
+  /* TODO: We should have a sanity check that no hostname matches the end of
+   * any other hostname, otherwise we will get ambigious results from
+   * rgw_find_host_in_domains.
+   * Eg: 
+   * Hostnames: [A, B.A]
+   * Inputs: [Z.A, X.B.A]
+   * Z.A clearly splits to subdomain=Z, domain=Z
+   * X.B.A ambigously splits to both {X, B.A} and {X.B, A}
+   */
+}
 
 int RGWHandler_ObjStore::read_permissions(RGWOp *op_obj)
 {

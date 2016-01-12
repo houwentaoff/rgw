@@ -760,6 +760,10 @@ int main ( int argc, char *argv[] )
     FCGX_Init();    
     int r = 0;
     RGWRados *store = new RGWRados;    
+    /*BUG:Fix 'http_status 200 (null) \r \n' -> 'http_status 200 OK \r \n'
+     * 用DragonDisk有时会提示错误,有时不会，对字符'OK'的验证*/
+    rgw_rest_init(g_ceph_context, NULL/*store->region*/);
+    
 //    rgw_user_init(store);
 //    rgw_bucket_init(store->meta_mgr);
 //    rgw_log_usage_init(g_ceph_context, store);

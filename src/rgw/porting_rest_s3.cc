@@ -235,8 +235,10 @@ int RGW_Auth_S3::authorize(RGWRados *store, struct req_state *s)
     }
     else
     {
-        k.key  =  "8888";//sp->sp_pwdp;
+ /* :TODO:2016/1/12 10:56:47:hwt: 如果有'$'号则会导致生成的签名不一致,需替换'$'符号,暂时设置为默认的8888 */
+        k.key  = "8888";//sp->sp_pwdp;
 //        k.key  =  sp->sp_pwdp;
+ /* :TODO:End---  */
     }
 #endif
 #endif
@@ -577,15 +579,15 @@ RGWOp *RGWHandler_ObjStore_Bucket_S3::op_options()
 }
 void RGWListBuckets_ObjStore_S3::send_response_begin(bool has_buckets)
 {
-  //if (ret)
-  //  set_req_state_err(s, ret);
+  if (ret)
+    set_req_state_err(s, ret);
   dump_errno(s);
   dump_start(s);
   end_header(s, NULL, "application/xml");
 
   if (!ret) {
     list_all_buckets_start(s);
-//    dump_owner(s, s->user.user_id, s->user.display_name);
+    dump_owner(s, s->user.user_id, s->user.display_name);
     s->formatter->open_array_section("Buckets");
     sent_data = true;
   }

@@ -179,5 +179,6 @@ extern void dump_content_length(struct req_state *s, uint64_t len);
 extern void dump_last_modified(struct req_state *s, time_t t);
 extern void dump_etag(struct req_state *s, const char *etag);
 extern void dump_time_header(struct req_state *s, const char *name, time_t t);
+extern void rgw_rest_init(CephContext *cct, void * /*RGWRegion& */region);
 
 #endif
