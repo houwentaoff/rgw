@@ -231,6 +231,7 @@ int RGW_Auth_S3::authorize(RGWRados *store, struct req_state *s)
     {
         //not found
         dout(0) << "ERROR: access key not encoded in user info" << dendl;
+        perror("getspnam fail\n");
         return -EPERM;
     }
     else

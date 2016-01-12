@@ -55,7 +55,12 @@ extern int rgw_get_user_info_by_access_key(RGWRados *store, string& access_key, 
 {
   int uid;
 
+#ifdef FICS
+  string fics_id = string("_fics_") + access_key;
+  uid = getuid(fics_id.c_str());
+#else
   uid = getuid(access_key.c_str());
+#endif
   if (uid < 0)
   {
     return -1;

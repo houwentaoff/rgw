@@ -796,6 +796,7 @@ void RGWGetObj::execute()
   if ((fd = ::open(full_path.c_str(), O_RDONLY)) < 0)
   {
       result = -1;
+      ret = ERR_PRECONDITION_FAILED;
       goto done_err;
   }
   sprintf(md5_buf, "md5sum %s", full_path.c_str());
@@ -1116,6 +1117,7 @@ void RGWPutObj::execute()
 #define BLOCK_SIZE          (4*1024)            /*  */
   char buf[BLOCK_SIZE+1];
   uid_t old_uid;
+  int id;
 
 //  perfcounter->inc(l_rgw_put);
   ret = -EINVAL;
@@ -1260,11 +1262,13 @@ void RGWPutObj::execute()
     
     ofs += len;
   } while (len > 0);
-  restore_privs(old_uid);
+  id = restore_privs(old_uid);
+#if 0
   if (!chunked_upload && ofs != s->content_length) {
     ret = -ERR_REQUEST_TIMEOUT;
     goto done;
   }
+#endif
   s->obj_size = ofs;
 //  perfcounter->inc(l_rgw_put_b, s->obj_size);
 
