@@ -149,7 +149,7 @@ void *listen_loop(void* arg)
             pthread_mutex_lock(&msg_mutex);
             msg_update++;
             msg[msg_update-1].msg_id = (cgw_msg_id_t)*(int *)&buffer[0];
-            memcpy(msg[msg_update-1].param, &buffer[sizeof(int)], num);
+            memcpy(msg[msg_update-1].param, &buffer[sizeof(int)], num-sizeof(int));
             msg[msg_update-1].sock_fd = com_fd;
         //    printf("accept %d\n", msg_update);
             pthread_mutex_unlock(&msg_mutex);

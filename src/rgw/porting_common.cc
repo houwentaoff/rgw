@@ -616,7 +616,11 @@ int gen_rand_alphanumeric(CephContext *cct, char *dest, int size) /* size should
 
   return 0;
 }
+#ifdef FICS
 #define FIGROUP		"_fics_"
+#else
+#define FIGROUP		""
+#endif
 #if 0
 {
     if (G.use_uid)
@@ -647,9 +651,9 @@ int getuid(const char *suffix_name)
     }
     return pwd->pw_uid;
 }
-int drop_privs(uid_t new_uid)
+int drop_privs(uint64_t new_uid)
 {
-    return setfsuid(new_uid);
+    return setfsuid((uid_t)new_uid);
 }
 int restore_privs(uid_t old_uid)
 {

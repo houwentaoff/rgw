@@ -1115,8 +1115,7 @@ void RGWPutObj::execute()
   int result = -1;
 #define BLOCK_SIZE          (4*1024)            /*  */
   char buf[BLOCK_SIZE+1];
-  uid_t new_uid,old_uid;
-  string name="";
+  uid_t old_uid;
 
 //  perfcounter->inc(l_rgw_put);
   ret = -EINVAL;
@@ -1177,8 +1176,8 @@ void RGWPutObj::execute()
   }
 //  name = get_cur_username();
 
-  new_uid = getuid(name.c_str());
-  old_uid = drop_privs(new_uid);
+//  new_uid = getuid(name.c_str());
+  old_uid = drop_privs(s->user.auid);
 
   full_path += G.buckets_root + string("/") + s->bucket.name +string("/") + s->object.name;
   if ((fd = ::open(full_path.c_str(), O_TRUNC|O_RDWR|O_CREAT/*|O_APPEND*/)) < 0)

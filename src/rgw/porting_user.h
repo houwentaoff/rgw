@@ -8,9 +8,9 @@
 
 #include "include/types.h"
 #include "porting_common.h"
-//#include "rgw_tools.h"
+#include "porting_tools.h"
 
-//#include "rgw_rados.h"
+#include "porting_rados.h"
 #include "include/porting.h"
 
 #include "rgw_string.h"

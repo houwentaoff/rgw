@@ -178,10 +178,10 @@ int RGW_Auth_S3::authorize(RGWRados *store, struct req_state *s)
   /* now try rados backend, but only if keystone did not succeed */
   if (keystone_result < 0) {
     /* get the user info */
-//    if (rgw_get_user_info_by_access_key(store, auth_id, s->user) < 0) {
-//      dout(5) << "error reading user info, uid=" << auth_id << " can't authenticate" << dendl;
-//      return -ERR_INVALID_ACCESS_KEY;
-//    }
+    if (rgw_get_user_info_by_access_key(store, auth_id, s->user) < 0) {
+      dout(5) << "error reading user info, uid=" << auth_id << " can't authenticate" << dendl;
+      return -ERR_INVALID_ACCESS_KEY;
+    }
 
     /* now verify signature */
 
@@ -236,6 +236,7 @@ int RGW_Auth_S3::authorize(RGWRados *store, struct req_state *s)
     else
     {
         k.key  =  "8888";//sp->sp_pwdp;
+//        k.key  =  sp->sp_pwdp;
     }
 #endif
 #endif
