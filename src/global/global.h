@@ -24,6 +24,14 @@
 
 #include <string>
 
+#ifdef FICS
+#define FIGROUP		    "_fics_"
+#define FICS_PREFIX		"_fics_"
+#else
+#define FIGROUP		""
+#define FICS_PREFIX		""
+#endif
+
 #define _M(x)                   (x*(1024*1024))/*  x M bytes*/
 #define _G(x)                   (x*_M(1024))/*  x G bytes*/
 

@@ -1116,7 +1116,7 @@ void RGWPutObj::execute()
   int result = -1;
 #define BLOCK_SIZE          (4*1024)            /*  */
   char buf[BLOCK_SIZE+1];
-  uid_t old_uid;
+  uid_t old_uid = 0;
   int id;
 
 //  perfcounter->inc(l_rgw_put);
@@ -1262,7 +1262,6 @@ void RGWPutObj::execute()
     
     ofs += len;
   } while (len > 0);
-  id = restore_privs(old_uid);
 #if 0
   if (!chunked_upload && ofs != s->content_length) {
     ret = -ERR_REQUEST_TIMEOUT;
@@ -1345,7 +1344,7 @@ void RGWPutObj::execute()
   ret = processor->complete(etag, &mtime, 0, attrs, delete_at, if_match, if_nomatch);
 #endif
 done:
-  ;
+  id = restore_privs(old_uid);
 //  dispose_processor(processor);
 //  perfcounter->tinc(l_rgw_put_lat,
 //                   (ceph_clock_now(s->cct) - s->time));

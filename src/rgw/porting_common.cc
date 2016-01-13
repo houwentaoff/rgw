@@ -616,11 +616,6 @@ int gen_rand_alphanumeric(CephContext *cct, char *dest, int size) /* size should
 
   return 0;
 }
-#ifdef FICS
-#define FIGROUP		"_fics_"
-#else
-#define FIGROUP		""
-#endif
 #if 0
 {
     if (G.use_uid)

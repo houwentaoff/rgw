@@ -36,25 +36,32 @@ LD = $(SYS_LIBS) -lpthread -lfcgi -lcurl
 LD_FICS = -L$(SDK_TOP)/bin/libs -lJson -lFicsJNI -lcomutility -lficsnet -lfiOsd -ljournal \
 		  -lprtmds -lfistate -lficsNetSyn -lzookeeper_mt
 
-TEST_FCGI 	:= test_fcgi.fcgi
+TEST_FCGI 		:= test_fcgi.fcgi
 
-TEST_GET_USERS := test_getuserinf
+TEST_GET_USERS  := test_getuserinf
+
+CMD_SERVER 		:= cmd_server
 
 all:ECHO_BUILD $(TEST_FCGI) 
 
 ECHO_BUILD:
 	@echo -e "\033[5;41;32m Building $(MODULE_NAME) ... \033[0m"
 
-TEST_FCGI_OBJS 	  =  test_fcgi.o
+TEST_FCGI_OBJS 	  		=  test_fcgi.o
 
-TEST_GET_USERS_OBJS    =  test_getuserinf.o
+TEST_GET_USERS_OBJS     =  test_getuserinf.o
 
-SER_MANAGER_OBJS       = ser_manager.o
+CMD_USERS_OBJS    		=  cmd_server.o
+
+SER_MANAGER_OBJS        =  ser_manager.o
 
 $(TEST_FCGI): $(TEST_FCGI_OBJS) 
 		$(CXX) $^ -o $@ 
 
 $(TEST_GET_USERS): $(TEST_GET_USERS_OBJS) $(LOCAL_LIBS)
+		$(CXX) $^ -o $@ $(LD_FICS)
+
+$(CMD_SERVER): $(CMD_USERS_OBJS) $(LOCAL_LIBS)
 		$(CXX) $^ -o $@ $(LD_FICS)
 
 $(SER_MANAGER): $(SER_MANAGER_OBJS)
@@ -64,4 +71,4 @@ $(SER_MANAGER): $(SER_MANAGER_OBJS)
 
 clean:
 	-@echo -e "\033[5;41;32m Cleaning $(MODULE_NAME) ... \033[0m"
-	-$(RM) *.o  $(TEST_FCGI_OBJS) $(TEST_FCGI)
+	-$(RM) *.o $(TEST_FCGI) $(CMD_SERVER) $(TEST_GET_USERS) $(SER_MANAGER)
