@@ -48,10 +48,10 @@ int getpawd(char *user, int sock_fd, ssize_t (*complete)(int, const void *, size
         if (itr->strName == user)
         {
             complete(sock_fd, (void *)itr->strPassword.c_str(), itr->strPassword.size());
+            printf("[client] user:[%s]passwd[%s]\n", itr->strName.c_str(), itr->strPassword.c_str()); 
             exist = true;
             break;
         }
-        printf("[client] user:[%s]passwd[%s]\n", itr->strName.c_str(), itr->strPassword.c_str()); 
     }
     if (!exist)
     {

@@ -213,8 +213,7 @@ int RGW_Auth_S3::authorize(RGWRados *store, struct req_state *s)
 #ifdef FICS
     int con_fd;
     char key_buf[256];
-    string name = string(FIGROUP) + auth_id;
-    con_fd = post_msg(CGW_MSG_GET_PASSWORD, name.c_str(), name.size(), false);
+    con_fd = post_msg(CGW_MSG_GET_PASSWORD, auth_id.c_str(), auth_id.size(), false);
     if (0 == recv_msg(con_fd, key_buf, true))
     {
         //not found

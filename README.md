@@ -27,6 +27,11 @@
 * centos7:   
     `yum install boost`
 
+### FICS
+
+1. `./cmd_server`
+2. `./test_main`
+
 ## TEST
 
 * config s3cmd config( src/etc/.s3cfg). use s3cmd. 
