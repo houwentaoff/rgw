@@ -90,6 +90,7 @@ struct globals {
     std::string user_name;
     std::string group_name;
     bool rgw_s3_auth_use_rados;
+    bool rgw_expose_bucket;
 };
 
 #endif

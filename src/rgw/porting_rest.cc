@@ -865,7 +865,7 @@ void dump_continue(struct req_state *s)
 }
 void dump_bucket_from_state(struct req_state *s)
 {
-  int expose_bucket = 1;//g_conf->rgw_expose_bucket;
+  int expose_bucket = G.rgw_expose_bucket;//g_conf->rgw_expose_bucket;
   if (expose_bucket) {
     if (!s->bucket_name_str.empty()) {
       string b;

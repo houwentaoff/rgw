@@ -165,6 +165,9 @@ int cgw_msg_handler(cgw_msg_t *p_msg, cgw_api_t *p_cgw_api)
         case CGW_MSG_GET_PASSWORD:
             p_cgw_api->getpawd(p_msg->param, p_msg->sock_fd, write);
             break;
+        case CGW_MSG_SET_VOLUME:
+            p_cgw_api->getpawd(p_msg->param, p_msg->sock_fd, write);
+            break;
         default:
             printf("error msg\n");
             break;

@@ -23,6 +23,7 @@
 typedef enum
 {
     CGW_MSG_GET_PASSWORD = 1,
+    CGW_MSG_SET_VOLUME,
     CGW_MSG_EXIT,
 }cgw_msg_id_t;
 

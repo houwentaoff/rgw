@@ -59,7 +59,24 @@ int getpawd(char *user, int sock_fd, ssize_t (*complete)(int, const void *, size
     }
     return 0;
 }
-
+int setvol()
+{
+    bool ret;
+	string strInfo;
+	WebVolInfo volumeInfo;
+    byte  type; 
+       
+    ret = Fi_ModifyVolume(type, volumeInfo, strInfo);
+    if (!ret)
+    {
+        printf("modify vol fail\n");
+    }
+    else
+    {
+        printf("modify vol success\n");
+    }
+    return 0;
+}
 /* 
  * ===  FUNCTION  ======================================================================
  *         Name:  main
