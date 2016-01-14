@@ -98,19 +98,52 @@ int RGWRados::get_bucket_entrypoint_info(RGWObjectCtx& obj_ctx, const string& bu
   bufferlist bl;
  /* :TODO:Sunday, December 25, 2015 10:58:30 CST:hwt:  */
   rgw_bucket domain_root;
+  int ret;
+#ifdef FICS
+  int con_fd;
+  char bucket_buf[512];
+
+  con_fd = post_msg(CGW_MSG_GET_VOLUME, bucket_name.c_str(), bucket_name.size(), false);
+  if (0 == recv_msg(con_fd, bucket_buf, true))
+  {
+      ret = -ENOENT;
+  }
+#else
   char cmd_buf[256] = {0};
 
   sprintf(cmd_buf, "[ -d %s/%s ]", G.buckets_root.c_str(), bucket_name.c_str());
-  int ret = shell_simple(cmd_buf);//rgw_get_system_obj(this, obj_ctx, domain_root/*zone.domain_root*/, bucket_name, bl, objv_tracker, pmtime, pattrs, cache_info);
-  if (ret /*<*/ != 0) {
-      ret = -ENOENT;//ret < 0 ? ret:0-ret;
+  ret = shell_simple(cmd_buf);//rgw_get_system_obj(this, obj_ctx, domain_root/*zone.domain_root*/, bucket_name, bl, objv_tracker, pmtime, pattrs, cache_info);
+  if (ret /*<*/ != 0) ret = -ENOENT;//ret < 0 ? ret:0-ret;
+#endif
+  if (ret < 0) {
     return ret;
   }
+#ifdef FICS
+  entry_point.bucket.name = bucket_name;//add by sean
+  entry_point.owner = get_val(bucket_buf, "owner");    
+  entry_point.creation_time = string2time(string(get_val(bucket_buf, "creation_time")).c_str());//add by sean
+#else
+  struct stat st_buf;
+  struct passwd *pwd;
+  
+  string full_path = G.buckets_root + bucket_name;
+  if (0 != stat(full_path.c_str(), &st_buf))
+  {
+      ret = -errorn;
+      return ret;
+  }
+  if (!(pwd = getpwuid(st_buf.st_uid)))
+  {
+      ret = -errorn;
+      return ret;
+  }
+
   entry_point.bucket.name = bucket_name;//add by sean
   entry_point.bucket.bucket_id = "bucket_id";//add by sean
   entry_point.bucket.oid = "oid";//add by sean
-  entry_point.owner = "admin";//add by sean
-//  entry_point.creation_time = ;//add by sean
+  entry_point.owner = pwd->pw_name//"admin";//add by sean
+  entry_point.creation_time = st_buf.st_mtime;//add by sean
+#endif
   entry_point.encode(bl);
  /* :TODO:End---  */
   bufferlist::iterator iter = bl.begin();
@@ -1369,7 +1402,7 @@ int RGWRados::put_bucket_entrypoint_info(const string& bucket_name, RGWBucketEnt
 {
     bufferlist epbl;
     ::encode(entry_point, epbl);
-    return 0;//rgw_bucket_store_info(this, bucket_name, epbl, exclusive, pattrs, &objv_tracker, mtime);
+    return rgw_bucket_store_info(this, bucket_name, epbl, exclusive, pattrs, &objv_tracker, mtime);
 }
 
 /*

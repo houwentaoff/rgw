@@ -79,8 +79,10 @@ void cls_user_set_buckets(librados::ObjectWriteOperation& op, list<cls_user_buck
   {
     if (true == add)
     {
+#ifdef FICS
+#else
         sprintf(cmd_buf, "mkdir -m 777 %s/%s", G.buckets_root.c_str(), it->bucket.name.c_str());
-        
+#endif   
     }
     else
     {

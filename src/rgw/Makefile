@@ -13,8 +13,8 @@
 # 
 # ###############################################
 
-#PLATFORM = FICS
-PLATFORM = UNIX
+PLATFORM = FICS
+#PLATFORM = UNIX
 
 default:test_main
 

@@ -37,6 +37,9 @@
 
 #include "cgw.h"
 
+#include <string>
+using namespace std;
+
 #define CMD_SERVICE  "/tmp/cmd_server"
 #define MSG_QUEUE_SIZE        10
 #define CGW_MSG_SIZE  128            /*  */
@@ -168,6 +171,9 @@ int cgw_msg_handler(cgw_msg_t *p_msg, cgw_api_t *p_cgw_api)
         case CGW_MSG_SET_VOLUME:
             p_cgw_api->getpawd(p_msg->param, p_msg->sock_fd, write);
             break;
+        case CGW_MSG_GET_VOLUME:
+            p_cgw_api->getvol(p_msg->param, p_msg->sock_fd, write);
+            break;
         default:
             printf("error msg\n");
             break;
@@ -225,4 +231,14 @@ int post_msg(int msg_id, const char payload[], int payload_size, bool bclose)
     return connect_fd;
 }
 
+string pack(const char *name, const char *value)
+{
+    char buf[512];
+    if (!value || *value)
+    {
+        return string("");
+    }
+    sprintf(buf, "%s = %s\n", name, value);
+    return string(buf)    
+}
 

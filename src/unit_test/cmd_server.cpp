@@ -59,6 +59,43 @@ int getpawd(char *user, int sock_fd, ssize_t (*complete)(int, const void *, size
     }
     return 0;
 }
+int getvol(char *vol_name, int sock_fd, ssize_t (*complete)(int, const void *, size_t))
+{
+    vector<WebVolInfo> vVolumeInfo;
+    vector<WebVolInfo> ::iterator it;
+    vector<WebUserInfo> vUser;
+    vector<WebUserInfo> ::iterator itr;
+    string sendBuf="";
+    bool exist = false;
+
+    Fi_GetVolumeInfo(vVolumeInfo);
+    for (it = vVolumeInfo.begin(); it != vVolumeInfo.end(); it++)
+    {
+        if (it->strName == vol_name)
+        {
+            for (itr = it->vUser.begin(); itr!=vUser.end(); itr++)
+            {
+                exist = true;
+                sendBuf += pack("owner", itr->strName);
+                break;
+            }
+        }
+        if (exist)
+        {
+            break;
+        }
+    }
+    if (!exist)
+    {
+        complete(sock_fd, (void *)"", 1);
+    }
+    else
+    {
+        printf("[client] vol:[%s] params[%s]\n", vol_name, sendBuf.c_str()); 
+        complete(sock_fd, sendBuf.c_str(), sendBuf.size());
+    }
+    return 0;
+}
 int setvol()
 {
     bool ret;

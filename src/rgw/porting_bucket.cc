@@ -21,6 +21,8 @@
 #include "porting_common.h"
 
 #include "cls/user/cls_user_types.h"
+#include "common/shell.h"
+#include "global/global.h"
 
 #define dout_subsys ceph_subsys_rgw
 
@@ -236,6 +238,34 @@ int rgw_unlink_bucket(RGWRados *store, string user_id, const string& bucket_name
 int rgw_bucket_store_info(RGWRados *store, const string& bucket_name, bufferlist& bl, bool exclusive,
                           map<string, bufferlist> *pattrs, RGWObjVersionTracker *objv_tracker,
                           time_t mtime) {
+  //元数据 处理
+  RGWBucketEntryPoint entry_point;
+  ::decode(entry_point, bl);
+#ifdef FICS
+  int con_fd;
+  char ret_buf[256];  
+  string params ="";
+
+  params += pack("vol_name", bucket_name);
+  params += pack("owner", entry_point.owner);
+  con_fd = post_msg(CGW_MSG_SET_VOLUME, params.c_str(), params.size(), false);
+  if (0 != recv_msg(con_fd, ret_buf, true))
+  {
+    //not found
+    dout(0) << "ERROR: create vol fail:" <<string(ret_buf)<< dendl;
+    return -1;
+  }  
+#else
+  char cmd[256];
+  int ret =0;
+  string full_name = G.buckets_root + string("/") + bucket_name; 
+  sprintf(cmd, "chown %s:%s %s", 
+          entry_point.owner.c_str(),
+          entry_point.owner.c_str(),
+          full_name.c_str());
+  ret = shell_simple(cmd);
+#endif
+  return 0;
 //  return store->meta_mgr->put_entry(bucket_meta_handler, bucket_name, bl, exclusive, objv_tracker, mtime, pattrs);
 }
 

@@ -24,14 +24,17 @@ typedef enum
 {
     CGW_MSG_GET_PASSWORD = 1,
     CGW_MSG_SET_VOLUME,
+    CGW_MSG_GET_VOLUME,
     CGW_MSG_EXIT,
 }cgw_msg_id_t;
 
+std::string pack(const char *name, const char *value);
 //cgw server use
 void *listen_loop(void* arg);
 void *main_loop(void* arg);
 typedef struct {
     int (*getpawd)(char *user, int sock_fd, ssize_t (*complete)(int fd, const void *buf, size_t count));
+    int (*getvol)(char *vol_name, int sock_fd, ssize_t (*complete)(int fd, const void *buf, size_t count));
 }cgw_api_t;
 //cgw client use
 int post_msg(int msg_id, const char payload[], int payload_size, bool bclose);
