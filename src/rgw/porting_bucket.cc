@@ -21,6 +21,7 @@
 #include "porting_common.h"
 
 #include "cls/user/cls_user_types.h"
+#include "cgw/cgw.h"
 #include "common/shell.h"
 #include "global/global.h"
 
@@ -246,10 +247,10 @@ int rgw_bucket_store_info(RGWRados *store, const string& bucket_name, bufferlist
   char ret_buf[256];  
   string params ="";
 
-  params += pack("vol_name", bucket_name);
-  params += pack("owner", entry_point.owner);
-  con_fd = post_msg(CGW_MSG_SET_VOLUME, params.c_str(), params.size(), false);
-  if (0 != recv_msg(con_fd, ret_buf, true))
+  params += pack("vol_name", bucket_name.c_str());
+  params += pack("owner", entry_point.owner.c_str());
+  con_fd = post_msg(CGW_MSG_SET_VOLUME, params.c_str(), params.size()+1, false);
+  if (1 != recv_msg(con_fd, ret_buf, true))
   {
     //not found
     dout(0) << "ERROR: create vol fail:" <<string(ret_buf)<< dendl;

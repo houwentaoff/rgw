@@ -27,18 +27,20 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/ipc.h>
-#include <string.h>
 #include <sys/ioctl.h>
 #include <pthread.h>
 #include <semaphore.h>
 #include <sys/time.h>
 #include <unistd.h>
 #include <sys/un.h>
+#include <string>
+#include <string.h>
+
+using namespace std;
 
 #include "cgw.h"
 
-#include <string>
-using namespace std;
+
 
 #define CMD_SERVICE  "/tmp/cmd_server"
 #define MSG_QUEUE_SIZE        10
@@ -169,15 +171,19 @@ int cgw_msg_handler(cgw_msg_t *p_msg, cgw_api_t *p_cgw_api)
             p_cgw_api->getpawd(p_msg->param, p_msg->sock_fd, write);
             break;
         case CGW_MSG_SET_VOLUME:
-            p_cgw_api->getpawd(p_msg->param, p_msg->sock_fd, write);
+            p_cgw_api->setvol(p_msg->param, p_msg->sock_fd, write);
             break;
         case CGW_MSG_GET_VOLUME:
             p_cgw_api->getvol(p_msg->param, p_msg->sock_fd, write);
+            break;
+        case CGW_MSG_DEL_VOLUME:   
+            p_cgw_api->delvol(p_msg->param, p_msg->sock_fd, write);
             break;
         default:
             printf("error msg\n");
             break;
     }
+    close(p_msg->sock_fd);
     return 0;
 }
 void *main_loop(void* arg)
@@ -239,6 +245,41 @@ string pack(const char *name, const char *value)
         return string("");
     }
     sprintf(buf, "%s = %s\n", name, value);
-    return string(buf)    
+    return string(buf);    
+}
+string get_val(const char *s, const char *key)
+{
+    const char *val;
+    const char *pos = s;
+    char buf[256]={0};
+    bool exist = false;
+
+    while (pos && *pos)
+    {
+        val = strstr(pos, key);
+        if (!val)
+        {
+            goto done;
+        }
+        if (0 != strncmp(val, " = ", strlen(" = ")))
+        {
+            pos = val;
+            continue;
+        }
+        val += strlen(" = ");
+        if (*val && !exist)
+        {
+            sscanf(val, "%s", buf);
+            exist = true;
+        }
+        pos = val;
+    }
+
+done:
+    if (!exist)
+    {
+        return string("");
+    }
+    return string(buf);
 }
 

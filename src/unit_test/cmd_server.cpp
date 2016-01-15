@@ -22,12 +22,13 @@
 
 #include <stdio.h>
 
+using namespace std;
+
 #include "cgw/cgw.h"
 
 #include "web_include/MdsSerialJson.h"
 #include "FicsJNI/FicsApi.h"
 
-using namespace std;
 
 extern void Fi_RefreshUserInfo();
 extern void Fi_InitDll();
@@ -47,7 +48,7 @@ int getpawd(char *user, int sock_fd, ssize_t (*complete)(int, const void *, size
     {
         if (itr->strName == user)
         {
-            complete(sock_fd, (void *)itr->strPassword.c_str(), itr->strPassword.size());
+            complete(sock_fd, (void *)itr->strPassword.c_str(), itr->strPassword.size()+1);
             printf("[client] user:[%s]passwd[%s]\n", itr->strName.c_str(), itr->strPassword.c_str()); 
             exist = true;
             break;
@@ -76,7 +77,7 @@ int getvol(char *vol_name, int sock_fd, ssize_t (*complete)(int, const void *, s
             for (itr = it->vUser.begin(); itr!=vUser.end(); itr++)
             {
                 exist = true;
-                sendBuf += pack("owner", itr->strName);
+                sendBuf += pack("owner", itr->strName.c_str());
                 break;
             }
         }
@@ -92,26 +93,45 @@ int getvol(char *vol_name, int sock_fd, ssize_t (*complete)(int, const void *, s
     else
     {
         printf("[client] vol:[%s] params[%s]\n", vol_name, sendBuf.c_str()); 
-        complete(sock_fd, sendBuf.c_str(), sendBuf.size());
+        complete(sock_fd, sendBuf.c_str(), sendBuf.size()+1);
     }
     return 0;
 }
-int setvol()
+
+int setvol(char *params,int sock_fd, ssize_t (*complete)(int, const void *, size_t))
 {
     bool ret;
 	string strInfo;
 	WebVolInfo volumeInfo;
-    byte  type; 
-       
+    byte  type = 0;//add 
+    WebUserInfo webInfo;
+    
+    volumeInfo.strName = get_val(params, "vol_name");
+    webInfo.strName = get_val(params, "owner");
+    volumeInfo.vUser.push_back(webInfo);
     ret = Fi_ModifyVolume(type, volumeInfo, strInfo);
     if (!ret)
     {
-        printf("modify vol fail\n");
+        complete(sock_fd, strInfo.c_str(), strInfo.size()+1);
+        printf("[client] modify vol fail\n"
+               "\t\t\t=============\t\t\n"
+               "%s"
+               "\t\t\t=============\t\t\n"
+               "info[%s]\n", params, strInfo.c_str());
     }
     else
     {
-        printf("modify vol success\n");
-    }
+        complete(sock_fd, "", 1);
+        printf("[client] modify vol success\n"
+               "\t\t\t=============\t\t\n"
+               "%s"
+               "\t\t\t=============\t\t\n"
+               "info[%s]\n", params, strInfo.c_str());
+     }
+    return 0;
+}
+int delvol(char *params,int sock_fd, ssize_t (*complete)(int, const void *, size_t))
+{
     return 0;
 }
 /* 
@@ -128,7 +148,10 @@ int main ( int argc, char *argv[] )
     pthread_attr_t attr[3];
 
     cgw_ops.getpawd = getpawd;
-
+    cgw_ops.getvol  = getvol;
+    cgw_ops.setvol  = setvol;
+    cgw_ops.delvol  = delvol;
+    
     cout<<"path:"<<GetFicsPath()<<endl;
 //    CFiContext::SetRelatvePath("../config/");
 //    g_strConfPath = g_strExeDir+ "../config/";

@@ -677,38 +677,3 @@ time_t string2time(const char *s)
     return (time_t)0;
 }
 
-string get_val(const char *s, const char *key)
-{
-    char *val;
-    char *pos = s;
-    char buf[256]={0};
-    bool exist = false;
-
-    while (pos && *pos)
-    {
-        val = strstr(pos, key);
-        if (!val)
-        {
-            goto done;
-        }
-        if (0 != strncmp(val, " = ", strlen(" = ")))
-        {
-            pos = val;
-            continue;
-        }
-        val += strlen(" = ");
-        if (*val && !exist)
-        {
-            sscanf(val, "%s", buf);
-            exist = true;
-        }
-        pos = val;
-    }
-
-done:
-    if (!exist)
-    {
-        return string("");
-    }
-    return string(buf);
-}

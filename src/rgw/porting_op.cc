@@ -34,6 +34,7 @@
 #include "include/rados/librados.hh"
 #include "common/shell.h"
 #include "common/ceph_crypto.h"
+#include "cgw/cgw.h"
 #include "global/global.h"
 
 #define MULTIPART_UPLOAD_ID_PREFIX_LEGACY "2/"
@@ -1085,12 +1086,30 @@ void RGWDeleteBucket::execute()
     ret = -ERR_NO_SUCH_BUCKET;
     return;
   }
+#ifdef FICS
+#if 0
+  int con_fd;
+  char key_buf[256];
+  con_fd = post_msg(CGW_MSG_GET_PASSWORD, auth_id.c_str(), auth_id.size()+1, false);
+  if (1 == recv_msg(con_fd, key_buf, true))
+  {
+      //not found
+      dout(0) << "ERROR: access key not encoded in user info" << dendl;
+      return -EPERM;
+  }
+    else
+    {
+        k.key = key_buf;
+    }
+#endif
+#else
   sprintf(cmd_buf, "rm -rf %s/%s", G.buckets_root.c_str(), s->bucket_name_str.c_str());
   if ((ret = shell_simple(cmd_buf))!=0)
   {
     ret = ERR_INTERNAL_ERROR;
     return;
   }
+#endif
 }
 void RGWPutObj::pre_exec()
 {

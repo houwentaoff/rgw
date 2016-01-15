@@ -213,8 +213,8 @@ int RGW_Auth_S3::authorize(RGWRados *store, struct req_state *s)
 #ifdef FICS
     int con_fd;
     char key_buf[256];
-    con_fd = post_msg(CGW_MSG_GET_PASSWORD, auth_id.c_str(), auth_id.size(), false);
-    if (0 == recv_msg(con_fd, key_buf, true))
+    con_fd = post_msg(CGW_MSG_GET_PASSWORD, auth_id.c_str(), auth_id.size()+1, false);
+    if (1 == recv_msg(con_fd, key_buf, true))
     {
         //not found
         dout(0) << "ERROR: access key not encoded in user info" << dendl;

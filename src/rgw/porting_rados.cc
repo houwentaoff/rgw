@@ -25,6 +25,7 @@
 #include "common/utf8.h"
 
 #include "porting_rados.h"
+#include "porting_bucket.h"
 #include "cls/user/cls_user_client.h"
 #include "include/rados/librados.hh"
 using namespace librados;
@@ -36,6 +37,7 @@ using namespace librados;
 #include "include/porting.h"
 #include "common/RefCountedObj.h"
 #include "common/shell.h"
+#include "cgw/cgw.h"
 #include "global/global.h"
 
 #include <string>
@@ -103,8 +105,8 @@ int RGWRados::get_bucket_entrypoint_info(RGWObjectCtx& obj_ctx, const string& bu
   int con_fd;
   char bucket_buf[512];
 
-  con_fd = post_msg(CGW_MSG_GET_VOLUME, bucket_name.c_str(), bucket_name.size(), false);
-  if (0 == recv_msg(con_fd, bucket_buf, true))
+  con_fd = post_msg(CGW_MSG_GET_VOLUME, bucket_name.c_str(), bucket_name.size()+1, false);
+  if (1 == recv_msg(con_fd, bucket_buf, true))
   {
       ret = -ENOENT;
   }

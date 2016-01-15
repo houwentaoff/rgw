@@ -1471,5 +1471,4 @@ extern void calc_hmac_sha1(const char *key, int key_len,
 extern bool parse_rfc2616(const char *s, struct tm *t);
 extern time_t string2time(const char *s);
 
-extern string get_val(const char *s, const char *key);
 #endif
