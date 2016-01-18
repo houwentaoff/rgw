@@ -978,7 +978,7 @@ void RGWCreateBucket::execute()
   }
   s->bucket.name = s->bucket_name_str;
   ret = store->create_bucket(s->user, s->bucket, region_name, placement_rule, attrs, info, pobjv,
-                             &ep_objv, creation_time, pmaster_bucket, true);
+                             &ep_objv, creation_time, pmaster_bucket, true);//并不真实 创建：ceph:创建存储池()不关联？
   /* continue if EEXIST and create_bucket will fail below.  this way we can recover
    * from a partial create by retrying it. */
   ldout(s->cct, 20) << "rgw_create_bucket returned ret=" << ret << " bucket=" << s->bucket << dendl;
@@ -1002,7 +1002,7 @@ void RGWCreateBucket::execute()
     s->bucket = info.bucket;
   }
 
-  ret = rgw_link_bucket(store, s->user.user_id, s->bucket, info.creation_time, false);
+  ret = rgw_link_bucket(store, s->user.user_id, s->bucket, info.creation_time, false);//关联bucket 创建bucket(文件夹，卷)
   if (ret && !existed && ret != -EEXIST) {  /* if it exists (or previously existed), don't remove it! */
     ret = rgw_unlink_bucket(store, s->user.user_id, s->bucket.name);
     if (ret < 0) {

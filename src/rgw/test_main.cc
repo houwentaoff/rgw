@@ -750,6 +750,7 @@ int main ( int argc, char *argv[] )
     G.buckets_root                  = "/fisamba";
     G.rgw_max_chunk_size            = 4*1024*1024;
     G.rgw_max_put_size              = _G(1);
+    G.rgw_cache_lru_size            = 10000;
     
     parse_conf(_PATH_CONF, &G, (FUNC)(&G.set_global_params));
         
@@ -765,7 +766,7 @@ int main ( int argc, char *argv[] )
     rgw_rest_init(g_ceph_context, NULL/*store->region*/);
     
 //    rgw_user_init(store);
-//    rgw_bucket_init(store->meta_mgr);
+    rgw_bucket_init(store->meta_mgr);
 //    rgw_log_usage_init(g_ceph_context, store);
     
     RGWREST rest;

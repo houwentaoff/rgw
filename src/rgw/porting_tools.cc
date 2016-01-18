@@ -26,6 +26,8 @@
 #include "porting_common.h"
 #include "porting_rados.h"
 #include "porting_tools.h"
+#include "common/shell.h"
+#include "global/global.h"
 
 #define dout_subsys ceph_subsys_rgw
 
@@ -36,7 +38,37 @@ static map<string, string> ext_mime_map;
 int rgw_put_system_obj(RGWRados *rgwstore, rgw_bucket& bucket, string& oid, const char *data, size_t size, bool exclusive,
                        RGWObjVersionTracker *objv_tracker, time_t set_mtime, map<string, bufferlist> *pattrs)
 {
+  bufferlist bl;
+  bl.append(data, size);    
+  RGWBucketEntryPoint entry_point;
+  ::decode(entry_point, bl);
+#ifdef FICS
+  int con_fd;
+  char ret_buf[256];  
+  string params ="";
+
+  params += pack("vol_name", entry_point.bucket.name.c_str());
+  params += pack("owner", entry_point.owner.c_str());
+  con_fd = post_msg(CGW_MSG_SET_VOLUME, params.c_str(), params.size()+1, false);
+  if (1 != recv_msg(con_fd, ret_buf, true))
+  {
+    //not found
+    dout(0) << "ERROR: create vol fail:" <<string(ret_buf)<< dendl;
+    return -1;
+  }  
+#else
+  char cmd[256];
+  int ret =0;
+  string full_name = G.buckets_root + string("/") + entry_point.bucket.name; 
+  sprintf(cmd, "chown %s:%s %s", 
+          entry_point.owner.c_str(),
+          entry_point.owner.c_str(),
+          full_name.c_str());
+  ret = shell_simple(cmd);
+#endif
+    
 #if 0
+  //设置属性 若失败则创建存储池(ceph)/创建桶/对象?
   map<string,bufferlist> no_attrs;
   if (!pattrs)
     pattrs = &no_attrs;

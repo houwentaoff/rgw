@@ -25,6 +25,7 @@
 #include "common/utf8.h"
 
 #include "porting_rados.h"
+#include "rgw_cache.h"
 #include "porting_bucket.h"
 #include "cls/user/cls_user_client.h"
 #include "include/rados/librados.hh"
@@ -35,9 +36,9 @@ using namespace librados;
 #include "cls/rgw/cls_rgw_ops.h"
 #include "cls/rgw/cls_rgw_client.h"
 #include "include/porting.h"
-#include "common/RefCountedObj.h"
 #include "common/shell.h"
 #include "cgw/cgw.h"
+#include <pwd.h>
 #include "global/global.h"
 
 #include <string>
@@ -46,9 +47,9 @@ using namespace librados;
 #include <list>
 #include <map>
 
+//extern int errno;
 #define MAX_BUCKET_INDEX_SHARDS_PRIME 7877
 
-#define RGW_BUCKET_INSTANCE_MD_PREFIX ".bucket.meta."
 
 using namespace std;
 
@@ -61,6 +62,8 @@ struct bucket_info_entry {
   time_t mtime;
   map<string, bufferlist> attrs;
 };
+
+static RGWChainedCacheImpl<bucket_info_entry> binfo_cache;
 
 static void filter_attrset(map<string, bufferlist>& unfiltered_attrset, const string& check_prefix,
                            map<string, bufferlist> *attrset)
@@ -131,19 +134,19 @@ int RGWRados::get_bucket_entrypoint_info(RGWObjectCtx& obj_ctx, const string& bu
   string full_path = G.buckets_root + bucket_name;
   if (0 != stat(full_path.c_str(), &st_buf))
   {
-      ret = -errorn;
+      ret = -errno;
       return ret;
   }
   if (!(pwd = getpwuid(st_buf.st_uid)))
   {
-      ret = -errorn;
+      ret = -errno;
       return ret;
   }
 
   entry_point.bucket.name = bucket_name;//add by sean
   entry_point.bucket.bucket_id = "bucket_id";//add by sean
   entry_point.bucket.oid = "oid";//add by sean
-  entry_point.owner = pwd->pw_name//"admin";//add by sean
+  entry_point.owner = pwd->pw_name;//"admin";//add by sean
   entry_point.creation_time = st_buf.st_mtime;//add by sean
 #endif
   entry_point.encode(bl);
@@ -162,14 +165,14 @@ int RGWRados::get_bucket_info(RGWObjectCtx& obj_ctx, const string& bucket_name, 
                               time_t *pmtime, map<string, bufferlist> *pattrs)
 {
   bucket_info_entry e;
-//  if (binfo_cache.find(bucket_name, &e)) {
-//    info = e.info;
-//    if (pattrs)
-//      *pattrs = e.attrs;
-//    if (pmtime)
-//      *pmtime = e.mtime;
-//    return 0;
-//  }
+  if (binfo_cache.find(bucket_name, &e)) {
+    info = e.info;
+    if (pattrs)
+      *pattrs = e.attrs;
+    if (pmtime)
+      *pmtime = e.mtime;
+    return 0;
+  }
 
   bufferlist bl;
 
@@ -229,9 +232,9 @@ int RGWRados::get_bucket_info(RGWObjectCtx& obj_ctx, const string& bucket_name, 
 
 
   /* chain to both bucket entry point and bucket instance */
-//  if (!binfo_cache.put(this, bucket_name, &e, cache_info_entries)) {
-//    ldout(cct, 20) << "couldn't put binfo cache entry, might have raced with data changes" << dendl;
-//  }
+  if (!binfo_cache.put(this, bucket_name, &e, cache_info_entries)) {
+    ldout(cct, 20) << "couldn't put binfo cache entry, might have raced with data changes" << dendl;
+  }
 
   return 0;
 }
@@ -920,6 +923,18 @@ int RGWRados::open_bucket_index_base(rgw_bucket& bucket, librados::IoCtx& index_
 
 }
 
+int RGWRados::get_bucket_instance_info(RGWObjectCtx& obj_ctx, const string& meta_key, RGWBucketInfo& info,
+                                       time_t *pmtime, map<string, bufferlist> *pattrs)
+{
+  int pos = meta_key.find(':');
+  if (pos < 0) {
+    return -EINVAL;
+  }
+  string oid = RGW_BUCKET_INSTANCE_MD_PREFIX + meta_key;
+
+  return get_bucket_instance_from_oid(obj_ctx, oid, info, pmtime, pattrs);
+}
+
 int RGWRados::get_bucket_instance_info(RGWObjectCtx& obj_ctx, rgw_bucket& bucket, RGWBucketInfo& info,
                                        time_t *pmtime, map<string, bufferlist> *pattrs)
 {
@@ -1481,7 +1496,7 @@ int RGWRados::create_bucket(RGWUserInfo& owner, rgw_bucket& bucket,
       time(&info.creation_time);
     else
       info.creation_time = creation_time;
-    ret = 0;//put_linked_bucket_info(info, exclusive, 0, pep_objv, &attrs, true);
+    ret = put_linked_bucket_info(info, exclusive, 0, pep_objv, &attrs, true);
     if (ret == -EEXIST) {
        /* we need to reread the info and return it, caller will have a use for it */
       RGWObjVersionTracker instance_ver = info.objv_tracker;
@@ -1508,7 +1523,7 @@ int RGWRados::create_bucket(RGWUserInfo& owner, rgw_bucket& bucket,
         /* remove bucket meta instance */
         string entry;
         get_bucket_instance_entry(bucket, entry);
-        r = 0;//rgw_bucket_instance_remove_entry(this, entry, &instance_ver);
+        r = rgw_bucket_instance_remove_entry(this, entry, &instance_ver);
         if (r < 0)
           return r;
 
@@ -1527,4 +1542,53 @@ int RGWRados::create_bucket(RGWUserInfo& owner, rgw_bucket& bucket,
   ldout(cct, 0) << "ERROR: could not create bucket, continuously raced with bucket creation and removal" << dendl;
   return -ENOENT;
     
+}
+
+int RGWRados::put_linked_bucket_info(RGWBucketInfo& info, bool exclusive, time_t mtime, obj_version *pep_objv,
+                                             map<string, bufferlist> *pattrs, bool create_entry_point)
+{
+    bufferlist bl;
+
+    bool create_head = !info.has_instance_obj || create_entry_point;
+
+    int ret = put_bucket_instance_info(info, exclusive, mtime, pattrs);
+    if (ret < 0) {
+        return ret;
+    }
+
+    if (!create_head)
+        return 0; /*  done!  */
+    RGWBucketEntryPoint entry_point;
+    entry_point.bucket = info.bucket;
+    entry_point.owner = info.owner;
+    entry_point.creation_time = info.creation_time;
+    entry_point.linked = true;
+    RGWObjVersionTracker ot;
+    if (pep_objv && !pep_objv->tag.empty()) {
+        ot.write_version = *pep_objv;
+    } else {
+        ot.generate_new_write_ver(cct);
+        if (pep_objv) {
+            *pep_objv = ot.write_version;
+        }
+    }
+    ret = put_bucket_entrypoint_info(info.bucket.name, entry_point, exclusive, ot, mtime, NULL); 
+    if (ret < 0)
+        return ret;
+
+    return 0;
+}
+
+int RGWRados::put_bucket_instance_info(RGWBucketInfo& info, bool exclusive,
+                                      time_t mtime, map<string, bufferlist> *pattrs)
+{
+    info.has_instance_obj = true;
+    bufferlist bl;
+
+    ::encode(info, bl);
+
+    string key;
+    get_bucket_instance_entry(info.bucket, key); /*  when we go through meta api, we don't use oid directly */
+    return rgw_bucket_instance_store_info(this, key, bl, exclusive, pattrs, &info.objv_tracker, mtime);
+
 }

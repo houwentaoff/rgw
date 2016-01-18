@@ -31,8 +31,8 @@
 
 using namespace std;
 
-//static RGWMetadataHandler *bucket_meta_handler = NULL;
-//static RGWMetadataHandler *bucket_instance_meta_handler = NULL;
+static RGWMetadataHandler *bucket_meta_handler = NULL;
+static RGWMetadataHandler *bucket_instance_meta_handler = NULL;
 
 // define as static when RGWBucket implementation compete
 void rgw_get_buckets_obj(const string& user_id, string& buckets_obj_id)
@@ -240,44 +240,17 @@ int rgw_bucket_store_info(RGWRados *store, const string& bucket_name, bufferlist
                           map<string, bufferlist> *pattrs, RGWObjVersionTracker *objv_tracker,
                           time_t mtime) {
   //元数据 处理
-  RGWBucketEntryPoint entry_point;
-  ::decode(entry_point, bl);
-#ifdef FICS
-  int con_fd;
-  char ret_buf[256];  
-  string params ="";
-
-  params += pack("vol_name", bucket_name.c_str());
-  params += pack("owner", entry_point.owner.c_str());
-  con_fd = post_msg(CGW_MSG_SET_VOLUME, params.c_str(), params.size()+1, false);
-  if (1 != recv_msg(con_fd, ret_buf, true))
-  {
-    //not found
-    dout(0) << "ERROR: create vol fail:" <<string(ret_buf)<< dendl;
-    return -1;
-  }  
-#else
-  char cmd[256];
-  int ret =0;
-  string full_name = G.buckets_root + string("/") + bucket_name; 
-  sprintf(cmd, "chown %s:%s %s", 
-          entry_point.owner.c_str(),
-          entry_point.owner.c_str(),
-          full_name.c_str());
-  ret = shell_simple(cmd);
-#endif
-  return 0;
-//  return store->meta_mgr->put_entry(bucket_meta_handler, bucket_name, bl, exclusive, objv_tracker, mtime, pattrs);
+  return store->meta_mgr->put_entry(bucket_meta_handler, bucket_name, bl, exclusive, objv_tracker, mtime, pattrs);
 }
 
 int rgw_bucket_instance_store_info(RGWRados *store, string& entry, bufferlist& bl, bool exclusive,
                           map<string, bufferlist> *pattrs, RGWObjVersionTracker *objv_tracker,
                           time_t mtime) {
-//  return store->meta_mgr->put_entry(bucket_instance_meta_handler, entry, bl, exclusive, objv_tracker, mtime, pattrs);
+  return store->meta_mgr->put_entry(bucket_instance_meta_handler, entry, bl, exclusive, objv_tracker, mtime, pattrs);
 }
 
 int rgw_bucket_instance_remove_entry(RGWRados *store, string& entry, RGWObjVersionTracker *objv_tracker) {
-//  return store->meta_mgr->remove_entry(bucket_instance_meta_handler, entry, objv_tracker);
+  return store->meta_mgr->remove_entry(bucket_instance_meta_handler, entry, objv_tracker);
 }
 
 int rgw_bucket_parse_bucket_instance(const string& bucket_instance, string *target_bucket_instance, int *shard_id)
@@ -503,7 +476,7 @@ int rgw_remove_bucket(RGWRados *store, const string& bucket_owner, rgw_bucket& b
 
 int rgw_bucket_delete_bucket_obj(RGWRados *store, string& bucket_name, RGWObjVersionTracker& objv_tracker)
 {
-//  return store->meta_mgr->remove_entry(bucket_meta_handler, bucket_name, &objv_tracker);
+  return store->meta_mgr->remove_entry(bucket_meta_handler, bucket_name, &objv_tracker);
 }
 
 static void set_err_msg(std::string *sink, std::string msg)
@@ -1532,7 +1505,7 @@ void RGWDataChangesLog::ChangesRenewThread::stop()
   cond.Signal();
 }
 #endif
-#if 0
+#if 1
 struct RGWBucketCompleteInfo {
   RGWBucketInfo info;
   map<string, bufferlist> attrs;
@@ -1587,7 +1560,7 @@ public:
     map<string, bufferlist> attrs;
     RGWObjectCtx obj_ctx(store);
 
-    int ret = 0;//store->get_bucket_entrypoint_info(obj_ctx, entry, be, &ot, &mtime, &attrs);
+    int ret = store->get_bucket_entrypoint_info(obj_ctx, entry, be, &ot, &mtime, &attrs);
     if (ret < 0)
       return ret;
 
@@ -1609,7 +1582,7 @@ public:
     RGWObjVersionTracker old_ot;
     RGWObjectCtx obj_ctx(store);
 
-    int ret = 0;//store->get_bucket_entrypoint_info(obj_ctx, entry, old_be, &old_ot, &orig_mtime, &attrs);
+    int ret = store->get_bucket_entrypoint_info(obj_ctx, entry, old_be, &old_ot, &orig_mtime, &attrs);
     if (ret < 0 && ret != -ENOENT)
       return ret;
 
@@ -1622,7 +1595,7 @@ public:
 
     objv_tracker.read_version = old_ot.read_version; /* maintain the obj version we just read */
 
-    ret = 0;//store->put_bucket_entrypoint_info(entry, be, false, objv_tracker, mtime, &attrs);
+    ret = store->put_bucket_entrypoint_info(entry, be, false, objv_tracker, mtime, &attrs);
     if (ret < 0)
       return ret;
 
@@ -1638,14 +1611,14 @@ public:
 
   struct list_keys_info {
     RGWRados *store;
-    RGWListRawObjsCtx ctx;
+//    RGWListRawObjsCtx ctx;
   };
 
   int remove(RGWRados *store, string& entry, RGWObjVersionTracker& objv_tracker) {
     RGWBucketEntryPoint be;
     RGWObjectCtx obj_ctx(store);
 
-    int ret = 0;//store->get_bucket_entrypoint_info(obj_ctx, entry, be, &objv_tracker, NULL, NULL);
+    int ret = store->get_bucket_entrypoint_info(obj_ctx, entry, be, &objv_tracker, NULL, NULL);
     if (ret < 0)
       return ret;
 
@@ -1656,12 +1629,14 @@ public:
      */
     ret = rgw_unlink_bucket(store, be.owner, entry, false);
     if (ret < 0) {
-//      lderr(store->ctx()) << "could not unlink bucket=" << entry << " owner=" << be.owner << dendl;
+//        lderr(store->ctx()) << "could not unlink bucket=" << entry << " owner=" << be.owner << dendl;
+        lderr(store) << "could not unlink bucket=" << entry << " owner=" << be.owner << dendl;
     }
 
     ret = rgw_bucket_delete_bucket_obj(store, entry, objv_tracker);
     if (ret < 0) {
-//      lderr(store->ctx()) << "could not delete bucket=" << entry << dendl;
+//        lderr(store->ctx()) << "could not delete bucket=" << entry << dendl;
+        lderr(store) << "could not delete bucket=" << entry << dendl;
     }
     /* idempotent */
     return 0;
@@ -1734,7 +1709,7 @@ public:
     time_t mtime;
     RGWObjectCtx obj_ctx(store);
 
-    int ret = 0;//store->get_bucket_instance_info(obj_ctx, oid, bci.info, &mtime, &bci.attrs);
+    int ret = store->get_bucket_instance_info(obj_ctx, oid, bci.info, &mtime, &bci.attrs);
     if (ret < 0)
       return ret;
 
@@ -1753,7 +1728,7 @@ public:
     time_t orig_mtime;
     RGWObjectCtx obj_ctx(store);
 
-    int ret = 0;//store->get_bucket_instance_info(obj_ctx, oid, old_bci.info, &orig_mtime, &old_bci.attrs);
+    int ret = store->get_bucket_instance_info(obj_ctx, oid, old_bci.info, &orig_mtime, &old_bci.attrs);
     bool exists = (ret != -ENOENT);
     if (ret < 0 && exists)
       return ret;
@@ -1787,7 +1762,7 @@ public:
     bci.info.objv_tracker.read_version = old_bci.info.objv_tracker.read_version;
     bci.info.objv_tracker.write_version = objv_tracker.write_version;
 
-    ret = 0;//store->put_bucket_instance_info(bci.info, false, mtime, &bci.attrs);
+    ret = store->put_bucket_instance_info(bci.info, false, mtime, &bci.attrs);
     if (ret < 0)
       return ret;
 
@@ -1802,14 +1777,14 @@ public:
 
   struct list_keys_info {
     RGWRados *store;
-    RGWListRawObjsCtx ctx;
+//    RGWListRawObjsCtx ctx;
   };
 
   int remove(RGWRados *store, string& entry, RGWObjVersionTracker& objv_tracker) {
     RGWBucketInfo info;
     RGWObjectCtx obj_ctx(store);
 
-    int ret = 0;//store->get_bucket_instance_info(obj_ctx, entry, info, NULL, NULL);
+    int ret = store->get_bucket_instance_info(obj_ctx, entry, info, NULL, NULL);
     if (ret < 0 && ret != -ENOENT)
       return ret;
 
@@ -1818,7 +1793,7 @@ public:
 
   void get_pool_and_oid(RGWRados *store, const string& key, rgw_bucket& bucket, string& oid) {
     oid = RGW_BUCKET_INSTANCE_MD_PREFIX + key;
-    bucket = NULL;//store->zone.domain_root;
+    //bucket = NULL;//store->zone.domain_root;
   }
 
   int list_keys_init(RGWRados *store, void **phandle)
@@ -1843,8 +1818,8 @@ public:
 
     list<string> unfiltered_keys;
 
-    int ret = store->list_raw_objects(store->zone.domain_root, no_filter,
-                                      max, info->ctx, unfiltered_keys, truncated);
+    int ret = 0;//store->list_raw_objects(store->zone.domain_root, no_filter,
+//                                      max, info->ctx, unfiltered_keys, truncated);
     if (ret < 0 && ret != -ENOENT)
       return ret;
     if (ret == -ENOENT) {
@@ -1890,8 +1865,8 @@ public:
 #endif
 void rgw_bucket_init(RGWMetadataManager *mm)
 {
-//  bucket_meta_handler = new RGWBucketMetadataHandler;
-//  mm->register_handler(bucket_meta_handler);
-//  bucket_instance_meta_handler = new RGWBucketInstanceMetadataHandler;
-//  mm->register_handler(bucket_instance_meta_handler);
+    bucket_meta_handler = new RGWBucketMetadataHandler;
+    mm->register_handler(bucket_meta_handler);
+    bucket_instance_meta_handler = new RGWBucketInstanceMetadataHandler;
+    mm->register_handler(bucket_instance_meta_handler);
 }

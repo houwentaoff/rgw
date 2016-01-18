@@ -2,6 +2,7 @@
 // vim: ts=8 sw=2 smarttab
 
 #include "rgw_cache.h"
+#include "global/global.h"
 
 #include <errno.h>
 
@@ -20,7 +21,7 @@ int ObjectCache::get(string& name, ObjectCacheInfo& info, uint32_t mask, rgw_cac
   map<string, ObjectCacheEntry>::iterator iter = cache_map.find(name);
   if (iter == cache_map.end()) {
     ldout(cct, 10) << "cache get: name=" << name << " : miss" << dendl;
-    if(perfcounter) perfcounter->inc(l_rgw_cache_miss);
+//    if(perfcounter) perfcounter->inc(l_rgw_cache_miss);
     return -ENOENT;
   }
 
@@ -35,7 +36,7 @@ int ObjectCache::get(string& name, ObjectCacheInfo& info, uint32_t mask, rgw_cac
     iter = cache_map.find(name);
     if (iter == cache_map.end()) {
       ldout(cct, 10) << "lost race! cache get: name=" << name << " : miss" << dendl;
-      if(perfcounter) perfcounter->inc(l_rgw_cache_miss);
+//      if(perfcounter) perfcounter->inc(l_rgw_cache_miss);
       return -ENOENT;
     }
 
@@ -49,7 +50,7 @@ int ObjectCache::get(string& name, ObjectCacheInfo& info, uint32_t mask, rgw_cac
   ObjectCacheInfo& src = iter->second.info;
   if ((src.flags & mask) != mask) {
     ldout(cct, 10) << "cache get: name=" << name << " : type miss (requested=" << mask << ", cached=" << src.flags << ")" << dendl;
-    if(perfcounter) perfcounter->inc(l_rgw_cache_miss);
+//    if(perfcounter) perfcounter->inc(l_rgw_cache_miss);
     return -ENOENT;
   }
   ldout(cct, 10) << "cache get: name=" << name << " : hit" << dendl;
@@ -59,7 +60,7 @@ int ObjectCache::get(string& name, ObjectCacheInfo& info, uint32_t mask, rgw_cac
     cache_info->cache_locator = name;
     cache_info->gen = entry->gen;
   }
-  if(perfcounter) perfcounter->inc(l_rgw_cache_hit);
+//  if(perfcounter) perfcounter->inc(l_rgw_cache_hit);
 
   return 0;
 }
@@ -214,7 +215,7 @@ void ObjectCache::remove(string& name)
 
 void ObjectCache::touch_lru(string& name, ObjectCacheEntry& entry, std::list<string>::iterator& lru_iter)
 {
-  while (lru_size > (size_t)cct->_conf->rgw_cache_lru_size) {
+  while (lru_size > (size_t)G.rgw_cache_lru_size) {
     list<string>::iterator iter = lru.begin();
     if ((*iter).compare(name) == 0) {
       /*
@@ -294,4 +295,8 @@ void ObjectCache::chain_cache(RGWChainedCache *cache) {
   RWLock::WLocker l(lock);
   chained_cache.push_back(cache);
 }
-
+void ObjectCache::set_ctx(CephContext *_cct)
+{
+    cct = _cct;
+    lru_window = G.rgw_cache_lru_size / 2;
+}

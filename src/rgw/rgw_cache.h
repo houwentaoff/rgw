@@ -4,7 +4,7 @@
 #ifndef CEPH_RGWCACHE_H
 #define CEPH_RGWCACHE_H
 
-#include "rgw_rados.h"
+#include "porting_rados.h"
 #include <string>
 #include <map>
 #include "include/types.h"
@@ -159,10 +159,7 @@ public:
   int get(std::string& name, ObjectCacheInfo& bl, uint32_t mask, rgw_cache_entry_info *cache_info);
   void put(std::string& name, ObjectCacheInfo& bl, rgw_cache_entry_info *cache_info);
   void remove(std::string& name);
-  void set_ctx(CephContext *_cct) {
-    cct = _cct;
-    lru_window = cct->_conf->rgw_cache_lru_size / 2;
-  }
+  void set_ctx(CephContext *_cct);
   bool chain_cache_entry(list<rgw_cache_entry_info *>& cache_info_entries, RGWChainedCache::Entry *chained_entry);
 
   void set_enabled(bool status);

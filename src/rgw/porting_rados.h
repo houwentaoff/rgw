@@ -20,15 +20,40 @@
 #ifndef __PORTING_RADOS_H__
 #define __PORTING_RADOS_H__
 
+#include "common/RefCountedObj.h"
+#include "common/RWLock.h"
 #include "porting_common.h"
+
 #include "cls/user/cls_user_types.h"
+#include "porting_metadata.h"
+#include "common/RWLock.h"
+
 #include "include/rados/librados.hh"
+
+#define RGW_BUCKET_INSTANCE_MD_PREFIX ".bucket.meta."
 
 class RGWRados;
 struct RGWObjState;
 
 #define RGW_OBJ_NS_MULTIPART "multipart"
 #define RGW_OBJ_NS_SHADOW    "shadow"
+
+class RGWChainedCache {
+public:
+  virtual ~RGWChainedCache() {}
+  virtual void chain_cb(const string& key, void *data) = 0;
+  virtual void invalidate(const string& key) = 0;
+  virtual void invalidate_all() = 0;
+
+  struct Entry {
+    RGWChainedCache *cache;
+    const string& key;
+    void *data;
+
+    Entry(RGWChainedCache *_c, const string& _k, void *_d) : cache(_c), key(_k), data(_d) {}
+  };
+};
+
 
 struct RGWObjectCtx {
   RGWRados *store;
@@ -59,11 +84,16 @@ public:
 class RGWRados
 {
     public:
-        RGWRados(){}
+        RGWMetadataManager *meta_mgr;
+        
+    public:
+        RGWRados():meta_mgr(NULL){  meta_mgr = new RGWMetadataManager(cct, this);}
         ~RGWRados(){}
     protected:
           CephContext *cct;
     public:
+      int put_bucket_instance_info(RGWBucketInfo& info, bool exclusive, time_t mtime, map<string, bufferlist> *pattrs);
+
       int put_bucket_entrypoint_info(const string& bucket_name, RGWBucketEntryPoint& entry_point, bool exclusive, RGWObjVersionTracker& objv_tracker, time_t mtime,
                                      map<string, bufferlist> *pattrs);
 
@@ -101,6 +131,8 @@ class RGWRados
       
       void get_bucket_instance_ids(RGWBucketInfo& bucket_info, int shard_id, map<int, string> *result);
       
+      int get_bucket_instance_info(RGWObjectCtx& obj_ctx, const string& meta_key, RGWBucketInfo& info, time_t *pmtime, map<string, bufferlist> *pattrs);
+
       int get_bucket_instance_info(RGWObjectCtx& obj_ctx, rgw_bucket& bucket, RGWBucketInfo& info, time_t *pmtime, map<string, bufferlist> *pattrs);
       int get_bucket_instance_from_oid(RGWObjectCtx& obj_ctx, string& oid, RGWBucketInfo& info, time_t *pmtime, map<string, bufferlist> *pattrs,
                                    rgw_cache_entry_info *cache_info = NULL);
@@ -304,6 +336,16 @@ class RGWRados
                               time_t *lastmod,
                               uint64_t *obj_size,
                               RGWObjVersionTracker *objv_tracker);
+  virtual int put_linked_bucket_info(RGWBucketInfo& info,
+                                     bool exclusive,
+                                     time_t mtime,
+                                     obj_version *pep_objv,
+                                     map<string, bufferlist> *pattrs,
+                                     bool create_entry_point);
+
+  virtual void register_chained_cache(RGWChainedCache *cache) {}
+  virtual bool chain_cache_entry(list<rgw_cache_entry_info *>& cache_info_entries, RGWChainedCache::Entry *chained_entry) { return false; }
+
   private:
   bool bucket_is_system(rgw_bucket& bucket) {
     return (bucket.name[0] == '.');
@@ -404,6 +446,54 @@ struct rgw_rados_ref {
   string oid;
   string key;
   librados::IoCtx ioctx;
+};
+
+template <class T>
+class RGWChainedCacheImpl : public RGWChainedCache {
+  RWLock lock;
+
+  map<string, T> entries;
+
+public:
+  RGWChainedCacheImpl() : lock("RGWChainedCacheImpl::lock") {}
+
+  void init(RGWRados *store) {
+    store->register_chained_cache(this);
+  }
+
+  bool find(const string& key, T *entry) {
+    RWLock::RLocker rl(lock);
+    typename map<string, T>::iterator iter = entries.find(key);
+    if (iter == entries.end()) {
+      return false;
+    }
+
+    *entry = iter->second;
+    return true;
+  }
+
+  bool put(RGWRados *store, const string& key, T *entry, list<rgw_cache_entry_info *>& cache_info_entries) {
+    Entry chain_entry(this, key, entry);
+
+    /* we need the store cache to call us under its lock to maintain lock ordering */
+    return store->chain_cache_entry(cache_info_entries, &chain_entry);
+  }
+
+  void chain_cb(const string& key, void *data) {
+    T *entry = static_cast<T *>(data);
+    RWLock::WLocker wl(lock);
+    entries[key] = *entry;
+  }
+
+  void invalidate(const string& key) {
+    RWLock::WLocker wl(lock);
+    entries.erase(key);
+  }
+
+  void invalidate_all() {
+    RWLock::WLocker wl(lock);
+    entries.clear();
+  }
 };
 
 

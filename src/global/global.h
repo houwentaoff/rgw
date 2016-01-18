@@ -91,6 +91,8 @@ struct globals {
     std::string group_name;
     bool rgw_s3_auth_use_rados;
     bool rgw_expose_bucket;
+    /* default is 10000*/
+    int rgw_cache_lru_size;
 };
 
 #endif
