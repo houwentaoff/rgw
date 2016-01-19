@@ -32,11 +32,16 @@
 
 #define RGW_BUCKET_INSTANCE_MD_PREFIX ".bucket.meta."
 
-class RGWRados;
-struct RGWObjState;
+/* flags for put_obj_meta() */
+#define PUT_OBJ_CREATE      0x01
+#define PUT_OBJ_EXCL        0x02
+#define PUT_OBJ_CREATE_EXCL (PUT_OBJ_CREATE | PUT_OBJ_EXCL)
 
 #define RGW_OBJ_NS_MULTIPART "multipart"
 #define RGW_OBJ_NS_SHADOW    "shadow"
+
+class RGWRados;
+struct RGWObjState;
 
 class RGWChainedCache {
 public:
@@ -87,10 +92,19 @@ class RGWRados
         RGWMetadataManager *meta_mgr;
         
     public:
-        RGWRados():meta_mgr(NULL){  meta_mgr = new RGWMetadataManager(cct, this);}
+        RGWRados():meta_mgr(NULL),rados(NULL), next_rados_handle(0),num_rados_handles(0), handle_lock("rados_handle_lock"){/*  meta_mgr = new RGWMetadataManager(cct, this);*/}
         ~RGWRados(){}
     protected:
           CephContext *cct;
+
+          librados::Rados **rados;
+          atomic_t next_rados_handle;
+          uint32_t num_rados_handles;
+          RWLock handle_lock;
+          std::map<pthread_t, int> rados_map;          
+          bool use_gc_thread;
+          bool quota_threads;
+
     public:
       int put_bucket_instance_info(RGWBucketInfo& info, bool exclusive, time_t mtime, map<string, bufferlist> *pattrs);
 
@@ -155,6 +169,26 @@ class RGWRados
         RGWObjectCtx *rctx = static_cast<RGWObjectCtx *>(ctx);
         rctx->set_prefetch_data(obj);
       }
+      librados::Rados* get_rados_handle();
+      void set_context(CephContext *_cct) {
+        cct = _cct;
+      }
+      int put_system_obj(void *ctx, rgw_obj& obj, const char *data, size_t len, bool exclusive,
+                  time_t *mtime, map<std::string, bufferlist>& attrs, RGWObjVersionTracker *objv_tracker,
+                  time_t set_mtime);
+
+      /** do all necessary setup of the storage device */
+      int initialize(CephContext *_cct, bool _use_gc_thread, bool _quota_threads) {
+        set_context(_cct);
+        use_gc_thread = _use_gc_thread;
+        quota_threads = _quota_threads;
+        return initialize();
+      }
+      /** Initialize the RADOS instance and prepare to do other ops */
+      virtual int init_rados();
+      int init_complete();
+      virtual int initialize();
+      virtual void finalize();      
       virtual int get_bucket_info(RGWObjectCtx& obj_ctx, const string& bucket_name, RGWBucketInfo& info,
                                   time_t *pmtime, map<string, bufferlist> *pattrs = NULL);
   /**
@@ -173,6 +207,8 @@ class RGWRados
                                 time_t creation_time,
                                 rgw_bucket *master_bucket,
                                 bool exclusive = true);
+      virtual int create_pool(rgw_bucket& bucket);
+      
 
   class SystemObject {
     RGWRados *store;
@@ -446,6 +482,23 @@ struct rgw_rados_ref {
   string oid;
   string key;
   librados::IoCtx ioctx;
+};
+
+class RGWStoreManager {
+public:
+  RGWStoreManager() {}
+  static RGWRados *get_storage(CephContext *cct, bool use_gc_thread, bool quota_threads) {
+    RGWRados *store = init_storage_provider(cct, use_gc_thread, quota_threads);
+    return store;
+  }
+  static RGWRados *get_raw_storage(CephContext *cct) {
+    RGWRados *store = init_raw_storage_provider(cct);
+    return store;
+  }
+  static RGWRados *init_storage_provider(CephContext *cct, bool use_gc_thread, bool quota_threads);
+  static RGWRados *init_raw_storage_provider(CephContext *cct);
+  static void close_storage(RGWRados *store);
+
 };
 
 template <class T>

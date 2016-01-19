@@ -13,16 +13,10 @@
 # 
 # ###############################################
 
-#PLATFORM = FICS
-PLATFORM = UNIX
 
 default:test_main
 
 MODULE_NAME := rgw
-
-ifeq ($(PLATFORM), FICS)
-MACRO = -DFICS
-endif
 
 INCLUDES 	 = -I../
 

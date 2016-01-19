@@ -30,6 +30,8 @@
 #include "memory.h"
 #include "buffer.h"
 
+#include "librados.h"
+
 #if __GNUC__ >= 4
   #define CEPH_RADOS_API  __attribute__ ((visibility ("default")))
 #else
@@ -38,6 +40,28 @@
 
 namespace librados
 {
+  class CEPH_RADOS_API IoCtx;
+  class RadosClient;
+  class CEPH_RADOS_API Rados
+  {
+      public:
+          int pool_create(const char *name);
+          int pool_create(const char *name, uint64_t auid);
+          int pool_create(const char *name, uint64_t auid, uint8_t crush_rule);
+          int mon_command(std::string cmd, const bufferlist& inbl,
+		                  bufferlist *outbl, std::string *outs);
+          static void version(int *major, int *minor, int *extra);
+
+          Rados();
+          explicit Rados(IoCtx& ioctx);
+          ~Rados();
+       private:
+        // We don't allow assignment or copying
+        Rados(const Rados& rhs);
+        const Rados& operator=(const Rados& rhs);
+        RadosClient *client;          
+  };
+
   class ObjectOperationImpl;  
   /*
    * ObjectOperation : compound object operation

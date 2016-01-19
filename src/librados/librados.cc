@@ -32,7 +32,7 @@
 
 #include "include/types.h"
 #include "include/rados/librados.hh"
-
+#include "RadosClient.h"
 #if 0
 librados::ObjectOperation::ObjectOperation()
 {
@@ -147,4 +147,45 @@ done:
         ::close(fd);
     }
      /* :TODO:End---  */
+}
+int librados::Rados::pool_create(const char *name)
+{
+  string str(name);
+  return client->pool_create(str);
+}
+
+int librados::Rados::pool_create(const char *name, uint64_t auid)
+{
+  string str(name);
+  return client->pool_create(str, auid);
+}
+
+int librados::Rados::pool_create(const char *name, uint64_t auid, __u8 crush_rule)
+{
+  string str(name);
+  return client->pool_create(str, auid, crush_rule);
+}
+
+int librados::Rados::mon_command(string cmd, const bufferlist& inbl,
+				 bufferlist *outbl, string *outs)
+{
+  vector<string> cmdvec;
+  cmdvec.push_back(cmd);
+  return client->mon_command(cmdvec, inbl, outbl, outs);
+}
+
+librados::Rados::Rados() : client(NULL)
+{
+}
+
+librados::Rados::Rados(IoCtx &ioctx)
+{
+//      client = ioctx.io_ctx_impl->client;
+//      assert(client != NULL);
+//      client->get();
+}
+
+librados::Rados::~Rados()
+{
+//      shutdown();
 }

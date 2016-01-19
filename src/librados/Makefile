@@ -23,7 +23,7 @@ INCLUDES 		 =  -I../
 
 include ../lib.rules
 
-LIB_OBJS = librados.o
+LIB_OBJS = librados.o RadosClient.o
 
 MODULE_TARGETS = $(MODULE_LIBS)
 

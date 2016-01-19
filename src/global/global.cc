@@ -43,6 +43,8 @@ void globals::init()
     rgw_s3_auth_use_rados   = false;
     rgw_expose_bucket       = true;
     rgw_cache_lru_size   = 0;
+    rgw_num_rados_handles  = 0;
+    rgw_cache_enabled       = false; 
 }
 void globals::set_global_params(void *obj, const char *name, const char *val)
 {
@@ -95,6 +97,14 @@ void globals::set_global_params(void *obj, const char *name, const char *val)
     {
         pobj->rgw_cache_lru_size = atoi(val);
     }    
+    if (string(name) =="rgw_num_rados_handles")
+    {
+        pobj->rgw_num_rados_handles = atoi(val);
+    }
+    if (string(name) =="rgw_cache_enabled")
+    {
+        pobj->rgw_cache_enabled = atoi(val) == 1 ? true :false;
+    }   
     
 }
 

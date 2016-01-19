@@ -751,6 +751,8 @@ int main ( int argc, char *argv[] )
     G.rgw_max_chunk_size            = 4*1024*1024;
     G.rgw_max_put_size              = _G(1);
     G.rgw_cache_lru_size            = 10000;
+    G.rgw_num_rados_handles         = 1;
+    G.rgw_cache_enabled             = false;
     
     parse_conf(_PATH_CONF, &G, (FUNC)(&G.set_global_params));
         
@@ -760,7 +762,10 @@ int main ( int argc, char *argv[] )
   
     FCGX_Init();    
     int r = 0;
-    RGWRados *store = new RGWRados;    
+    //RGWRados *store = new RGWRados; 
+    RGWRados *store = RGWStoreManager::get_storage(g_ceph_context,
+    false, false);
+
     /*BUG:Fix 'http_status 200 (null) \r \n' -> 'http_status 200 OK \r \n'
      * 用DragonDisk有时会提示错误,有时不会，对字符'OK'的验证*/
     rgw_rest_init(g_ceph_context, NULL/*store->region*/);

@@ -13,6 +13,13 @@
 # 
 # ###############################################
 
+#PLATFORM = FICS
+PLATFORM = UNIX
+
+ifeq ($(PLATFORM), FICS)
+MACRO = -DFICS
+endif
+
 #AR                      =   arm-goke-linux-gnueabi-ar
 CXX                      =   g++ -std=c++11
 

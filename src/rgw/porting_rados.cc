@@ -1592,3 +1592,185 @@ int RGWRados::put_bucket_instance_info(RGWBucketInfo& info, bool exclusive,
     return rgw_bucket_instance_store_info(this, key, bl, exclusive, pattrs, &info.objv_tracker, mtime);
 
 }
+/**
+ * create a rados pool, associated meta info
+ * returns 0 on success, -ERR# otherwise.
+ */
+int RGWRados::create_pool(rgw_bucket& bucket) 
+{
+  int ret = 0;
+
+  string pool = bucket.index_pool;
+
+  librados::Rados *rad = get_rados_handle();
+  ret = rad->pool_create(pool.c_str(), 0);
+  if (ret == -EEXIST)
+    ret = 0;
+  if (ret < 0)
+    return ret;
+
+  if (bucket.data_pool != pool) {
+    ret = rad->pool_create(bucket.data_pool.c_str(), 0);
+    if (ret == -EEXIST)
+      ret = 0;
+    if (ret < 0)
+      return ret;
+  }
+  return 0;
+}
+
+librados::Rados* RGWRados::get_rados_handle()
+{
+  if (num_rados_handles == 1) {
+    return rados[0];
+  } else {
+    handle_lock.get_read();
+    pthread_t id = pthread_self();
+    std::map<pthread_t, int>:: iterator it = rados_map.find(id);
+
+    if (it != rados_map.end()) {
+      handle_lock.put_read();
+      return rados[it->second];
+    } else {
+      handle_lock.put_read();
+      handle_lock.get_write();
+      uint32_t handle = next_rados_handle.read();
+      if (handle == num_rados_handles) {
+        next_rados_handle.set(0);
+        handle = 0;
+      }
+      rados_map[id] = handle;
+      next_rados_handle.inc();
+      handle_lock.put_write();
+      return rados[handle];
+    }
+  }
+}
+/** 
+ * Initialize the RADOS instance and prepare to do other ops
+ * Returns 0 on success, -ERR# on failure.
+ */
+int RGWRados::initialize()
+{
+  int ret;
+
+  ret = init_rados();
+  if (ret < 0)
+    return ret;
+
+  ret = init_complete();
+
+  return ret;
+}
+/** 
+ * Initialize the RADOS instance and prepare to do other ops
+ * Returns 0 on success, -ERR# on failure.
+ */
+int RGWRados::init_complete()
+{
+  int ret = 0;
+    
+  binfo_cache.init(this);
+
+  return ret;
+}
+/** 
+ * Initialize the RADOS instance and prepare to do other ops
+ * Returns 0 on success, -ERR# on failure.
+ */
+int RGWRados::init_rados()
+{
+  int ret = 0;
+
+  num_rados_handles = G.rgw_num_rados_handles;//cct->_conf->rgw_num_rados_handles;
+
+  rados = new librados::Rados *[num_rados_handles];
+  if (!rados) {
+    ret = -ENOMEM;
+    return ret;
+  }
+
+  for (uint32_t i=0; i < num_rados_handles; i++) {
+
+    rados[i] = new Rados();
+    if (!rados[i]) {
+      ret = -ENOMEM;
+      goto fail;
+    }
+
+    ret = 0;// rados[i]->init_with_context(cct);
+    if (ret < 0) {
+      goto fail;
+    }
+
+    ret = 0;// rados[i]->connect();
+    if (ret < 0) {
+      goto fail;
+    }
+  }
+
+  meta_mgr = new RGWMetadataManager(cct, this);
+//  data_log = new RGWDataChangesLog(cct, this);
+
+  return ret;
+
+fail:
+  for (uint32_t i=0; i < num_rados_handles; i++) {
+    if (rados[i]) {
+      delete rados[i];
+      rados[i] = NULL;
+    }
+  }
+  num_rados_handles = 0;
+  if (rados) {
+    delete[] rados;
+    rados = NULL;
+  }
+
+  return ret;
+}
+RGWRados *RGWStoreManager::init_storage_provider(CephContext *cct, bool use_gc_thread, bool quota_threads)
+{
+  int use_cache = G.rgw_cache_enabled;
+  RGWRados *store = NULL;
+  if (!use_cache) {
+    store = new RGWRados;
+  } else {
+    store = new RGWCache<RGWRados>; 
+  }
+
+  if (store->initialize(cct, use_gc_thread, quota_threads) < 0) {
+    delete store;
+    return NULL;
+  }
+
+  return store;
+}
+void RGWRados::finalize()
+{
+  delete meta_mgr;
+//  delete data_log;
+//  RGWQuotaHandler::free_handler(quota_handler);
+    
+}
+int RGWRados::put_system_obj(void *ctx, rgw_obj& obj, const char *data, size_t len, bool exclusive,
+                  time_t *mtime, map<std::string, bufferlist>& attrs, RGWObjVersionTracker *objv_tracker,
+                  time_t set_mtime)
+{
+    bufferlist bl, outbl;
+    string outs;
+    int ret;
+    string cmd;
+    bl.append(data, len);
+    int flags = PUT_OBJ_CREATE;
+    if (exclusive)
+      flags |= PUT_OBJ_EXCL;
+    
+    librados::Rados *rad = get_rados_handle();
+    cmd = "chown";
+    ret = rad->mon_command(cmd, bl, &outbl, &outs);
+    if (ret == -EEXIST)
+        ret = 0;
+    if (ret < 0)
+    return ret;    //return put_system_obj_impl(obj, len, mtime, attrs, flags, bl, objv_tracker, set_mtime);    
+}

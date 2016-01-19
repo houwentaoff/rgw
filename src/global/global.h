@@ -93,6 +93,10 @@ struct globals {
     bool rgw_expose_bucket;
     /* default is 10000*/
     int rgw_cache_lru_size;
+    /* default is 1*/
+    uint32_t rgw_num_rados_handles;
+    /* */
+    bool rgw_cache_enabled;
 };
 
 #endif

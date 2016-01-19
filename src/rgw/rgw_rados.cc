@@ -2831,7 +2831,7 @@ done:
  */
 int RGWRados::create_pool(rgw_bucket& bucket) 
 {
-#if 0
+#if 1
   int ret = 0;
 
   string pool = bucket.index_pool;
