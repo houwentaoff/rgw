@@ -42,6 +42,7 @@
 
 class RGWRados;
 struct RGWObjState;
+struct RGWStorageStats;
 
 class RGWChainedCache {
 public:
@@ -90,9 +91,9 @@ class RGWRados
 {
     public:
         RGWMetadataManager *meta_mgr;
-        
+        RGWQuotaHandler *quota_handler;
     public:
-        RGWRados():meta_mgr(NULL),rados(NULL), next_rados_handle(0),num_rados_handles(0), handle_lock("rados_handle_lock"){/*  meta_mgr = new RGWMetadataManager(cct, this);*/}
+        RGWRados():quota_handler(NULL),meta_mgr(NULL),rados(NULL), next_rados_handle(0),num_rados_handles(0), handle_lock("rados_handle_lock"){/*  meta_mgr = new RGWMetadataManager(cct, this);*/}
         ~RGWRados(){}
     protected:
           CephContext *cct;
@@ -176,6 +177,13 @@ class RGWRados
       int put_system_obj(void *ctx, rgw_obj& obj, const char *data, size_t len, bool exclusive,
                   time_t *mtime, map<std::string, bufferlist>& attrs, RGWObjVersionTracker *objv_tracker,
                   time_t set_mtime);
+
+      int check_quota(const string& bucket_owner, rgw_bucket& bucket,
+                  RGWQuotaInfo& user_quota, RGWQuotaInfo& bucket_quota, uint64_t obj_size);
+
+      int get_bucket_stats(rgw_bucket& bucket, string *bucket_ver, string *master_ver,
+                  map<RGWObjCategory, RGWStorageStats>& stats, string *max_marker);
+      int cls_bucket_head(rgw_bucket& bucket, map<string, struct rgw_bucket_dir_header>& headers, map<int, string> *bucket_instance_ids = NULL);
 
       /** do all necessary setup of the storage device */
       int initialize(CephContext *_cct, bool _use_gc_thread, bool _quota_threads) {
@@ -499,6 +507,45 @@ public:
   static RGWRados *init_raw_storage_provider(CephContext *cct);
   static void close_storage(RGWRados *store);
 
+};
+
+struct RGWStorageStats
+{
+  RGWObjCategory category;
+  uint64_t num_kb;
+  uint64_t num_kb_rounded;
+  uint64_t num_objects;
+
+  RGWStorageStats() : category(RGW_OBJ_CATEGORY_NONE), num_kb(0), num_kb_rounded(0), num_objects(0) {}
+
+  void dump(Formatter *f) const;
+};
+
+
+class RGWGetBucketStats_CB : public RefCountedObject {
+protected:
+  rgw_bucket bucket;
+  map<RGWObjCategory, RGWStorageStats> *stats;
+public:
+  RGWGetBucketStats_CB(rgw_bucket& _bucket) : bucket(_bucket), stats(NULL) {}
+  virtual ~RGWGetBucketStats_CB() {}
+  virtual void handle_response(int r) = 0;
+  virtual void set_response(map<RGWObjCategory, RGWStorageStats> *_stats) {
+    stats = _stats;
+  }
+};
+
+class RGWGetUserStats_CB : public RefCountedObject {
+protected:
+  string user;
+  RGWStorageStats stats;
+public:
+  RGWGetUserStats_CB(const string& _user) : user(_user) {}
+  virtual ~RGWGetUserStats_CB() {}
+  virtual void handle_response(int r) = 0;
+  virtual void set_response(RGWStorageStats& _stats) {
+    stats = _stats;
+  }
 };
 
 template <class T>

@@ -1573,7 +1573,7 @@ static void add_new_connection_to_map(map<string, RGWRESTConn *> &region_conn_ma
 int RGWRados::init_complete()
 {
   int ret;
-#if 0
+#if 1
   ret = region.init(cct, this);
   if (ret < 0)
     return ret;

@@ -1290,8 +1290,8 @@ void RGWPutObj::execute()
   s->obj_size = ofs;
 //  perfcounter->inc(l_rgw_put_b, s->obj_size);
 
-//  ret = store->check_quota(s->bucket_owner.get_id(), s->bucket,
-//                           user_quota, bucket_quota, s->obj_size);
+  ret = store->check_quota("bwcpn"/*s->bucket_owner.get_id()*/, s->bucket,
+                           user_quota, bucket_quota, s->obj_size);
   if (ret < 0) {
     ldout(s->cct, 20) << "second check_quota() returned ret=" << ret << dendl;
     goto done;

@@ -1670,7 +1670,8 @@ int RGWRados::initialize()
 int RGWRados::init_complete()
 {
   int ret = 0;
-    
+
+  quota_handler = RGWQuotaHandler::generate_handler(this, quota_threads);
   binfo_cache.init(this);
 
   return ret;
@@ -1751,7 +1752,7 @@ void RGWRados::finalize()
 {
   delete meta_mgr;
 //  delete data_log;
-//  RGWQuotaHandler::free_handler(quota_handler);
+  RGWQuotaHandler::free_handler(quota_handler);
     
 }
 int RGWRados::put_system_obj(void *ctx, rgw_obj& obj, const char *data, size_t len, bool exclusive,
@@ -1775,3 +1776,92 @@ int RGWRados::put_system_obj(void *ctx, rgw_obj& obj, const char *data, size_t l
 
     return ret;    //return put_system_obj_impl(obj, len, mtime, attrs, flags, bl, objv_tracker, set_mtime);    
 }
+int RGWRados::check_quota(const string& bucket_owner, rgw_bucket& bucket,
+                          RGWQuotaInfo& user_quota, RGWQuotaInfo& bucket_quota, uint64_t obj_size)
+{
+  return quota_handler->check_quota(bucket_owner, bucket, user_quota, bucket_quota, 1, obj_size);
+}
+static void accumulate_raw_stats(rgw_bucket_dir_header& header, map<RGWObjCategory, RGWStorageStats>& stats)
+{
+  map<uint8_t, struct rgw_bucket_category_stats>::iterator iter = header.stats.begin();
+  for (; iter != header.stats.end(); ++iter) {
+    RGWObjCategory category = (RGWObjCategory)iter->first;
+    RGWStorageStats& s = stats[category];
+    struct rgw_bucket_category_stats& header_stats = iter->second;
+    s.category = (RGWObjCategory)iter->first;
+    s.num_kb += ((header_stats.total_size + 1023) / 1024);
+    s.num_kb_rounded += ((header_stats.total_size_rounded + 1023) / 1024);
+    s.num_objects += header_stats.num_entries;
+  }
+}
+
+/**
+ * @brief 获取桶的先关信息，如配额
+ *
+ * @param bucket
+ * @param bucket_ver
+ * @param master_ver
+ * @param stats
+ * @param max_marker
+ *
+ * @return 
+ */
+int RGWRados::get_bucket_stats(rgw_bucket& bucket, string *bucket_ver, string *master_ver,
+    map<RGWObjCategory, RGWStorageStats>& stats, string *max_marker)
+{
+  map<string, rgw_bucket_dir_header> headers;
+  map<int, string> bucket_instance_ids;
+  int r = cls_bucket_head(bucket, headers, &bucket_instance_ids);
+  if (r < 0)
+    return r;
+ /* :TODO:2016/1/20 17:27:34:hwt: just for test */
+  struct rgw_bucket_category_stats;
+  
+  rgw_bucket_category_stats.total_size = 1000;//1K 属性中设置
+  rgw_bucket_category_stats.total_size_rounded = 2000;//2K
+  rgw_bucket_category_stats.num_entries = 20;//20个文件
+
+//  rgw_bucket_dir_header.stats.insert( (1, ));
+ /* :TODO:End---  */
+  assert(headers.size() == bucket_instance_ids.size());
+
+  map<string, rgw_bucket_dir_header>::iterator iter = headers.begin();
+  map<int, string>::iterator viter = bucket_instance_ids.begin();
+  //BucketIndexShardsManager ver_mgr;
+  //BucketIndexShardsManager master_ver_mgr;
+  //BucketIndexShardsManager marker_mgr;
+  char buf[64];
+  for(; iter != headers.end(); ++iter, ++viter) {
+    accumulate_raw_stats(iter->second, stats);
+    snprintf(buf, sizeof(buf), "%lu", (unsigned long)iter->second.ver);
+    //ver_mgr.add(viter->first, string(buf));
+    snprintf(buf, sizeof(buf), "%lu", (unsigned long)iter->second.master_ver);
+    //master_ver_mgr.add(viter->first, string(buf));
+    //marker_mgr.add(viter->first, iter->second.max_marker);
+  }
+  //ver_mgr.to_string(bucket_ver);
+  //master_ver_mgr.to_string(master_ver);
+  //marker_mgr.to_string(max_marker);
+  return 0;
+}
+int RGWRados::cls_bucket_head(rgw_bucket& bucket, map<string, struct rgw_bucket_dir_header>& headers, map<int, string> *bucket_instance_ids)
+{
+  librados::IoCtx index_ctx;
+  map<int, string> oids;
+  map<int, struct rgw_cls_list_ret> list_results;
+  int r = open_bucket_index(bucket, index_ctx, oids, list_results, -1, bucket_instance_ids);
+  if (r < 0)
+    return r;
+
+  r = 0;//CLSRGWIssueGetDirHeader(index_ctx, oids, list_results, cct->_conf->rgw_bucket_index_max_aio)();
+  if (r < 0)
+    return r;
+
+  map<int, struct rgw_cls_list_ret>::iterator iter = list_results.begin();
+  for(; iter != list_results.end(); ++iter) {
+    headers[oids[iter->first]] = iter->second.dir.header;
+  }
+  return 0;
+}
+
+

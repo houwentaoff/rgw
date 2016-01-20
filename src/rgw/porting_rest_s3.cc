@@ -191,7 +191,7 @@ int RGW_Auth_S3::authorize(RGWRados *store, struct req_state *s)
       return -EPERM;
     }
     dout(10) << "auth_hdr:\n" << auth_hdr << dendl;
-
+#if 0
     time_t req_sec = s->header_time.sec();
     if ((req_sec < now - RGW_AUTH_GRACE_MINS * 60 ||
         req_sec > now + RGW_AUTH_GRACE_MINS * 60) && !qsr) {
@@ -199,6 +199,7 @@ int RGW_Auth_S3::authorize(RGWRados *store, struct req_state *s)
       dout(0) << "NOTICE: request time skew too big now=" << utime_t(now, 0) << " req_time=" << s->header_time << dendl;
       return -ERR_REQUEST_TIME_SKEWED;
     }
+#endif
     //get user info from mds: use fics RPC ? 尽可能使用rgw_user.cc 中的结构
 #if 0
     map<string, RGWAccessKey>::iterator iter = s->user.access_keys.find(auth_id);

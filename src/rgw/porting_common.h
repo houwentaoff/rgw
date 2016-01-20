@@ -34,6 +34,7 @@
 #include "porting_acl.h"
 #include "include/porting.h"
 #include "rgw_string.h"
+#include "porting_quota.h"
 #include "common/ceph_json.h"
 #include "cls/version/cls_version_types.h"
 #include "cls/rgw/cls_rgw_types.h"
@@ -172,6 +173,13 @@ enum http_op {
   OP_OPTIONS,
   OP_UNKNOWN,
 };
+enum RGWObjCategory {
+  RGW_OBJ_CATEGORY_NONE      = 0,
+  RGW_OBJ_CATEGORY_MAIN      = 1,
+  RGW_OBJ_CATEGORY_SHADOW    = 2,
+  RGW_OBJ_CATEGORY_MULTIMETA = 3,
+};
+
 class RGWConf;
 class RGWEnv {
   std::map<string, string, ltstr_nocase> env_map;
@@ -1436,6 +1444,16 @@ static inline void buf_to_hex(const unsigned char *buf, int len, char *str)
   for (i = 0; i < len; i++) {
     sprintf(&str[i*2], "%02x", (int)buf[i]);
   }
+}
+
+static inline uint64_t rgw_rounded_kb(uint64_t bytes)
+{
+  return (bytes + 1023) / 1024;
+}
+
+static inline uint64_t rgw_rounded_objsize_kb(uint64_t bytes)
+{
+  return ((bytes + 4095) & ~4095) / 1024;
 }
 
 /** Convert an input URL into a sane object name
