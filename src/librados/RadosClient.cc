@@ -64,8 +64,6 @@
 #undef dout_prefix
 #define dout_prefix *_dout << "librados: "
 
-//using namespace std;
-
 int librados::RadosClient::mon_command(const vector<string>& cmd,
 				       bufferlist &inbl,
 				       bufferlist *outbl, string *outs)
@@ -83,22 +81,40 @@ int librados::RadosClient::mon_command(const vector<string>& cmd,
             bufferlist::iterator iter = inbl.begin();
 
             RGWBucketEntryPoint entry_point;
-            //::decode()
             entry_point.decode(iter);
             
 #ifdef FICS
 
 #else
             string full_name = G.buckets_root + string("/") + entry_point.bucket.name; 
-            sprintf(scmd, "chown %s:%s %s", 
-            entry_point.owner.c_str(),
-            entry_point.owner.c_str(),
-            full_name.c_str());  
-            ret = shell_simple(scmd);  
+            struct passwd *pwd;
+
+            pwd = getpwnam(entry_point.owner.c_str());
+//            uid_t uid = getuid(entry_point.owner.c_str());
+            if (!pwd)
+            {
+              ret = -errno;
+            }
+            else
+            {
+              if (chown(full_name.c_str(), pwd->pw_uid, pwd->pw_gid) < 0)
+              {
+                ret = -errno;
+              }
+            }
+//            sprintf(scmd, "chown %s:%s %s", 
+//            entry_point.owner.c_str(),
+//            entry_point.owner.c_str(),
+//            full_name.c_str());  
+//            ret = shell_simple(scmd);  
 #endif
         }
+        if (ret != 0)
+        {
+          break;
+        }
     }
-    return 0;
+    return ret;
 }
 int librados::RadosClient::pool_create(string& name, unsigned long long auid,
 				       int16_t crush_rule)

@@ -166,7 +166,7 @@ int librados::Rados::pool_create(const char *name, uint64_t auid, __u8 crush_rul
   return client->pool_create(str, auid, crush_rule);
 }
 
-int librados::Rados::mon_command(string cmd, const bufferlist& inbl,
+int librados::Rados::mon_command(string cmd, /*const*/ bufferlist& inbl,
 				 bufferlist *outbl, string *outs)
 {
   vector<string> cmdvec;

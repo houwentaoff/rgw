@@ -48,7 +48,7 @@ namespace librados
           int pool_create(const char *name);
           int pool_create(const char *name, uint64_t auid);
           int pool_create(const char *name, uint64_t auid, uint8_t crush_rule);
-          int mon_command(std::string cmd, const bufferlist& inbl,
+          int mon_command(std::string cmd, /*const*/ bufferlist& inbl,
 		                  bufferlist *outbl, std::string *outs);
           static void version(int *major, int *minor, int *extra);
 

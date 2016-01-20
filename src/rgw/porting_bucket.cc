@@ -1643,7 +1643,10 @@ public:
   }
 
   void get_pool_and_oid(RGWRados *store, const string& key, rgw_bucket& bucket, string& oid) {
+    char buf[256] = {0};
     oid = key;
+    sscanf(key.c_str(), "%[^:]s", buf);
+    bucket.name = buf;
 //    bucket = store->zone.domain_root;
   }
 
@@ -1794,6 +1797,9 @@ public:
   void get_pool_and_oid(RGWRados *store, const string& key, rgw_bucket& bucket, string& oid) {
     oid = RGW_BUCKET_INSTANCE_MD_PREFIX + key;
     //bucket = NULL;//store->zone.domain_root;
+    char buf[256] = {0};
+    sscanf(key.c_str(), "%[^:]s", buf);
+    bucket.name = buf;
   }
 
   int list_keys_init(RGWRados *store, void **phandle)

@@ -99,7 +99,13 @@ struct RGWCacheNotifyInfo {
   uint32_t op;
   rgw_obj obj;
   ObjectCacheInfo obj_info;
+ /* :TODO:Tuesday, January 19, 2016 09:28:09 CST:hwt: fix compile error*/
+#ifdef __x86_64__
   off_t ofs;
+#elif __i386__
+  int ofs;
+#endif  
+   /* :TODO:End---  */
   string ns;
 
   RGWCacheNotifyInfo() : op(0), ofs(0) {}

@@ -131,7 +131,7 @@ int RGWRados::get_bucket_entrypoint_info(RGWObjectCtx& obj_ctx, const string& bu
   struct stat st_buf;
   struct passwd *pwd;
   
-  string full_path = G.buckets_root + bucket_name;
+  string full_path = G.buckets_root + string("/") + bucket_name;
   if (0 != stat(full_path.c_str(), &st_buf))
   {
       ret = -errno;
@@ -1600,7 +1600,7 @@ int RGWRados::create_pool(rgw_bucket& bucket)
 {
   int ret = 0;
 
-  string pool = bucket.index_pool;
+  string pool = bucket.name;//bucket.index_pool;
 
   librados::Rados *rad = get_rados_handle();
   ret = rad->pool_create(pool.c_str(), 0);
@@ -1608,7 +1608,7 @@ int RGWRados::create_pool(rgw_bucket& bucket)
     ret = 0;
   if (ret < 0)
     return ret;
-
+#if 0
   if (bucket.data_pool != pool) {
     ret = rad->pool_create(bucket.data_pool.c_str(), 0);
     if (ret == -EEXIST)
@@ -1616,6 +1616,7 @@ int RGWRados::create_pool(rgw_bucket& bucket)
     if (ret < 0)
       return ret;
   }
+#endif
   return 0;
 }
 
@@ -1771,6 +1772,6 @@ int RGWRados::put_system_obj(void *ctx, rgw_obj& obj, const char *data, size_t l
     ret = rad->mon_command(cmd, bl, &outbl, &outs);
     if (ret == -EEXIST)
         ret = 0;
-    if (ret < 0)
+
     return ret;    //return put_system_obj_impl(obj, len, mtime, attrs, flags, bl, objv_tracker, set_mtime);    
 }
