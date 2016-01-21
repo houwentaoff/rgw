@@ -693,7 +693,7 @@ int main ( int argc, char *argv[] )
     G.rgw_cache_lru_size            = 10000;
     G.rgw_num_rados_handles         = 1;
     G.rgw_cache_enabled             = false;
-    G.sys_user_bucket_root          = "/.sys_user_bucket";
+    G.sys_user_bucket_root          = "/.sys_user";
     parse_conf(_PATH_CONF, &G, "=",(FUNC)(&G.set_global_params));
         
     ldout(0, 0)<<"hello world\n"<<dendl;
@@ -710,7 +710,7 @@ int main ( int argc, char *argv[] )
      * 用DragonDisk有时会提示错误,有时不会，对字符'OK'的验证*/
     rgw_rest_init(g_ceph_context, NULL/*store->region*/);
     
-//    rgw_user_init(store);
+    rgw_user_init(store);//user info cache init
     rgw_bucket_init(store->meta_mgr);
 //    rgw_log_usage_init(g_ceph_context, store);
     

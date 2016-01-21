@@ -136,6 +136,10 @@ int rgw_get_system_obj(RGWRados *rgwstore, RGWObjectCtx& obj_ctx, rgw_bucket& bu
 
   user_inf.encode(bl_tmp);
   bl.append(bl_tmp);
+  if (cache_info)
+  {
+      cache_info->cache_locator = key;
+  }
   /* :TODO:End---  */
 #if 0
   do {

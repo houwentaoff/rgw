@@ -19,6 +19,7 @@
 #include "porting_common.h"
 #include "auth/Crypto.h"
 #include "common/ceph_crypto.h"
+#include "include/str_list.h"
 
 #include <unistd.h>
 #include <sys/types.h>
@@ -738,6 +739,39 @@ int parse_conf(const char *path, void* obj, const char *delim, void (*cb)(void* 
     return 0;
 err:
     return -1;
+}
+struct rgw_name_to_flag {
+  const char *type_name;
+  uint32_t flag;
+};
+
+static int parse_list_of_flags(struct rgw_name_to_flag *mapping,
+                               const string& str, uint32_t *perm)
+{
+  list<string> strs;
+  get_str_list(str, strs);
+  list<string>::iterator iter;
+  uint32_t v = 0;
+  for (iter = strs.begin(); iter != strs.end(); ++iter) {
+    string& s = *iter;
+    for (int i = 0; mapping[i].type_name; i++) {
+      if (s.compare(mapping[i].type_name) == 0)
+        v |= mapping[i].flag;
+    }
+  }
+
+  *perm = v;
+  return 0;
+}
+static struct rgw_name_to_flag op_type_mapping[] = { {"*",  RGW_OP_TYPE_ALL},
+                  {"read",  RGW_OP_TYPE_READ},
+		  {"write", RGW_OP_TYPE_WRITE},
+		  {"delete", RGW_OP_TYPE_DELETE},
+		  {NULL, 0} };
+
+int rgw_parse_op_type_list(const string& str, uint32_t *perm)
+{
+  return parse_list_of_flags(op_type_mapping, str, perm);
 }
 
 

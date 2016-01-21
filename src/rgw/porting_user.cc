@@ -28,7 +28,7 @@
 using namespace std;
 
 
-//static RGWMetadataHandler *user_meta_handler = NULL;
+static RGWMetadataHandler *user_meta_handler = NULL;
 
 struct user_info_entry {
   RGWUserInfo info;
@@ -166,4 +166,173 @@ extern int rgw_get_user_info_by_access_key(RGWRados *store, string& access_key, 
   //info.max_buckets = ;
   return rgw_get_user_info_from_index(store, access_key, sys_user_bucket/*store->zone.user_keys_pool*/, info, objv_tracker, pmtime);
 }
+struct RGWUserCompleteInfo {
+  RGWUserInfo info;
+  map<string, bufferlist> attrs;
+  bool has_attrs;
 
+  RGWUserCompleteInfo()
+    : has_attrs(false)
+  {}
+
+  void dump(Formatter * const f) const {
+    info.dump(f);
+    encode_json("attrs", attrs, f);
+  }
+
+  void decode_json(JSONObj *obj) {
+    decode_json_obj(info, obj);
+    has_attrs = JSONDecoder::decode_json("attrs", attrs, obj);
+  }
+};
+
+class RGWUserMetadataObject : public RGWMetadataObject {
+  RGWUserCompleteInfo uci;
+public:
+  RGWUserMetadataObject(const RGWUserCompleteInfo& _uci, obj_version& v, time_t m)
+      : uci(_uci) {
+    objv = v;
+    mtime = m;
+  }
+
+  void dump(Formatter *f) const {
+    uci.dump(f);
+  }
+};
+
+class RGWUserMetadataHandler : public RGWMetadataHandler {
+public:
+  string get_type() { return "user"; }
+
+  int get(RGWRados *store, string& entry, RGWMetadataObject **obj) {
+    RGWUserCompleteInfo uci;
+    RGWObjVersionTracker objv_tracker;
+    time_t mtime;
+
+    int ret = rgw_get_user_info_by_uid(store, entry, uci.info, &objv_tracker,
+                                       &mtime, NULL, &uci.attrs);
+    if (ret < 0) {
+      return ret;
+    }
+
+    RGWUserMetadataObject *mdo = new RGWUserMetadataObject(uci, objv_tracker.read_version, mtime);
+    *obj = mdo;
+
+    return 0;
+  }
+
+  int put(RGWRados *store, string& entry, RGWObjVersionTracker& objv_tracker,
+          time_t mtime, JSONObj *obj, sync_type_t sync_mode) {
+    RGWUserCompleteInfo uci;
+
+    decode_json_obj(uci, obj);
+
+    map<string, bufferlist> *pattrs = NULL;
+    if (uci.has_attrs) {
+      pattrs = &uci.attrs;
+    }
+
+    RGWUserInfo old_info;
+    time_t orig_mtime;
+    int ret = rgw_get_user_info_by_uid(store, entry, old_info, &objv_tracker, &orig_mtime);
+    if (ret < 0 && ret != -ENOENT)
+      return ret;
+
+    // are we actually going to perform this put, or is it too old?
+    if (ret != -ENOENT &&
+        !check_versions(objv_tracker.read_version, orig_mtime,
+			objv_tracker.write_version, mtime, sync_mode)) {
+      return STATUS_NO_APPLY;
+    }
+
+    ret = 0;//rgw_store_user_info(store, uci.info, &old_info, &objv_tracker, mtime, false, pattrs);
+    if (ret < 0) {
+      return ret;
+    }
+
+    return STATUS_APPLIED;
+  }
+
+  struct list_keys_info {
+    RGWRados *store;
+//    RGWListRawObjsCtx ctx;
+  };
+
+  int remove(RGWRados *store, string& entry, RGWObjVersionTracker& objv_tracker) {
+    RGWUserInfo info;
+    int ret = rgw_get_user_info_by_uid(store, entry, info, &objv_tracker);
+    if (ret < 0)
+      return ret;
+
+    return rgw_delete_user(store, info, objv_tracker);
+  }
+
+  void get_pool_and_oid(RGWRados *store, const string& key, rgw_bucket& bucket, string& oid) {
+    oid = key;
+    bucket.name = G.sys_user_bucket_root;//store->zone.user_uid_pool;
+  }
+
+  int list_keys_init(RGWRados *store, void **phandle)
+  {
+    list_keys_info *info = new list_keys_info;
+
+    info->store = store;
+
+    *phandle = (void *)info;
+
+    return 0;
+  }
+
+  int list_keys_next(void *handle, int max, list<string>& keys, bool *truncated) {
+    list_keys_info *info = static_cast<list_keys_info *>(handle);
+
+    string no_filter;
+
+    keys.clear();
+
+    RGWRados *store = info->store;
+
+    list<string> unfiltered_keys;
+
+    int ret = 0;//store->list_raw_objects(rgw_bucket root(G.sys_user_bucket_root.c_str()),/* store->zone.user_uid_pool, */ no_filter,
+//                                      max, info->ctx, unfiltered_keys, truncated);
+    if (ret < 0)
+      return ret;
+
+    // now filter out the buckets entries
+    list<string>::iterator iter;
+    for (iter = unfiltered_keys.begin(); iter != unfiltered_keys.end(); ++iter) {
+      string& k = *iter;
+
+      if (k.find(".buckets") == string::npos) {
+        keys.push_back(k);
+      }
+    }
+
+    return 0;
+  }
+
+  void list_keys_complete(void *handle) {
+    list_keys_info *info = static_cast<list_keys_info *>(handle);
+    delete info;
+  }
+};
+
+void rgw_user_init(RGWRados *store)
+{
+  uinfo_cache.init(store);
+
+  user_meta_handler = new RGWUserMetadataHandler;
+  store->meta_mgr->register_handler(user_meta_handler);
+}
+
+/**
+ * delete a user's presence from the RGW system.
+ * First remove their bucket ACLs, then delete them
+ * from the user and user email pools. This leaves the pools
+ * themselves alone, as well as any ACLs embedded in object xattrs.
+ */
+int rgw_delete_user(RGWRados *store, RGWUserInfo& info, RGWObjVersionTracker& objv_tracker) 
+{
+  return 0;
+}

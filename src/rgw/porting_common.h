@@ -1491,5 +1491,8 @@ extern void calc_hmac_sha1(const char *key, int key_len,
 extern bool parse_rfc2616(const char *s, struct tm *t);
 extern time_t string2time(const char *s);
 extern int parse_conf(const char *path, void* obj, const char *delim, void (*cb)(void* obj, const char *name, const char *val));
+/* destination should be CEPH_CRYPTO_HMACSHA1_DIGESTSIZE bytes long */
+
+extern int rgw_parse_op_type_list(const string& str, uint32_t *perm);
 
 #endif
