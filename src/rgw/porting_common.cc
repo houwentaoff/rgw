@@ -708,7 +708,7 @@ int parse_conf(const char *path, void* obj, const char *delim, void (*cb)(void* 
         goto err;
     }
     
-    sscanf(format, "%%[^%c]%c%%s", *delim, *delim);
+    sprintf(format, "%%[^%c]%c%%s", *delim, *delim);
     if (NULL == (fp = fopen(path, "r")))
     {
         goto err;
@@ -731,7 +731,7 @@ int parse_conf(const char *path, void* obj, const char *delim, void (*cb)(void* 
             goto err;
         }
         strip_space(var_name);
-        printf("name[%s] %c [%s]\n", *delim, var_name, value);
+        printf("name[%s] %c [%s]\n", var_name, *delim, value);
         cb(obj, var_name, value);
         r = fscanf(fp, "%*[\n]");
     }
