@@ -29,6 +29,7 @@
 
 #include "porting_op.h"
 #include "porting_common.h"
+#include "porting_user.h"
 #include "porting_rest.h"
 #include "porting_rados.h"
 #include "include/rados/librados.hh"
@@ -1503,4 +1504,49 @@ int RGWInitMultipart::get_data(bufferlist& bl)
   return len;
 }
 #endif
+int RGWOp::init_quota()
+{
+  /* no quota enforcement for system requests */
+  if (s->system_request)
+    return 0;
+
+  /* init quota related stuff */
+  if (!(s->user.op_mask & RGW_OP_TYPE_MODIFY)) {
+    return 0;
+  }
+
+  /* only interested in object related ops */
+  if (s->object.empty()) {
+    return 0;
+  }
+
+  RGWUserInfo owner_info;
+  RGWUserInfo *uinfo;
+
+  if (1/*s->user.user_id == s->bucket_owner.get_id()*/) {//用户是该桶的拥有者
+    uinfo = &s->user;
+  } else {
+    int r = rgw_get_user_info_by_uid(store, s->bucket_info.owner, owner_info);//找出拥有者 将拥有者的配额赋值进来
+    if (r < 0)
+      return r;
+    uinfo = &owner_info;
+  }
+
+  if (s->bucket_info.quota.enabled) {
+    bucket_quota = s->bucket_info.quota;
+  } else if (uinfo->bucket_quota.enabled) {
+    bucket_quota = uinfo->bucket_quota;
+  } else {
+    ;//bucket_quota = store->region_map.bucket_quota;
+  }
+
+  if (uinfo->user_quota.enabled) {
+    user_quota = uinfo->user_quota;
+  } else {
+    ;//user_quota = store->region_map.user_quota;
+  }
+
+  return 0;
+}
+
 

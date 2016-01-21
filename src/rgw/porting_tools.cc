@@ -26,6 +26,7 @@
 #include "porting_common.h"
 #include "porting_rados.h"
 #include "porting_tools.h"
+#include "porting_user.h"
 #include "common/shell.h"
 #include "global/global.h"
 
@@ -34,6 +35,47 @@
 #define READ_CHUNK_LEN (512 * 1024)
 
 static map<string, string> ext_mime_map;
+
+void sys_info::set_params(void* obj, const char *name, const char *val)
+{
+    sys_info *pobj = (sys_info *)obj;
+    if (string(name) == "display_name")
+    {
+        pobj->display_name = val;
+    }
+    if (string(name) == "user_email")
+    {
+        pobj->user_email = val;
+    }
+    if (string(name) == "max_buckets")
+    {
+        pobj->max_buckets = atoi(val);
+    }
+    if (string(name) == "bucket_max_size_kb")
+    {
+        pobj->bucket_max_size_kb = atoi(val);
+    }
+    if (string(name) == "bucket_max_objects")
+    {
+        pobj->bucket_max_objects = atoi(val);
+    }
+    if (string(name) == "bucket_enabled")
+    {
+        pobj->bucket_enabled = atoi(val) == 1 ? true :false;;
+    }
+    if (string(name) == "user_max_size_kb")
+    {
+        pobj->user_max_size_kb =  atoi(val);
+    }    
+    if (string(name) == "user_max_objects")
+    {
+        pobj->user_max_objects = atoi(val);
+    }  
+    if (string(name) == "user_enabled")
+    {
+        pobj->user_enabled = atoi(val) == 1 ? true :false;;
+    }      
+}
 
 int rgw_put_system_obj(RGWRados *rgwstore, rgw_bucket& bucket, string& oid, const char *data, size_t size, bool exclusive,
                        RGWObjVersionTracker *objv_tracker, time_t set_mtime, map<string, bufferlist> *pattrs)
@@ -58,7 +100,6 @@ int rgw_put_system_obj(RGWRados *rgwstore, rgw_bucket& bucket, string& oid, cons
 #endif
   return 0;
 }
-
 int rgw_get_system_obj(RGWRados *rgwstore, RGWObjectCtx& obj_ctx, rgw_bucket& bucket, const string& key, bufferlist& bl,
                        RGWObjVersionTracker *objv_tracker, time_t *pmtime, map<string, bufferlist> *pattrs,
                        rgw_cache_entry_info *cache_info)
@@ -67,7 +108,36 @@ int rgw_get_system_obj(RGWRados *rgwstore, RGWObjectCtx& obj_ctx, rgw_bucket& bu
   bufferlist::iterator iter;
   int request_len = READ_CHUNK_LEN;
   rgw_obj obj(bucket, key);
+  /* :TODO:2016/1/21 16:35:13:hwt:  获取用户头信息*/
+  RGWUID uid;
+  RGWUserInfo user_inf;
+  bufferlist  bl_tmp;
+    
+//push uid
+  uid.user_id = key;
+  uid.encode(bl_tmp);
+  bl.append(bl_tmp);
+  bl_tmp.clear();
+//push user info
+  string conf_path = G.sys_user_bucket_root + string("/") + string(".") + uid.user_id + string(".conf");
+  sys_info info;
+  
+  parse_conf(conf_path.c_str(), &info, ":",(FUNC)(&info.set_params));
 
+  user_inf.max_buckets = info.max_buckets;
+  user_inf.bucket_quota.enabled = info.bucket_enabled;
+    
+  user_inf.bucket_quota.max_size_kb = info.bucket_max_size_kb;
+  user_inf.bucket_quota.max_objects = info.bucket_max_objects;
+
+  user_inf.user_quota.enabled = info.user_enabled;
+  user_inf.user_quota.max_size_kb =  info.user_max_size_kb;
+  user_inf.user_quota.max_objects = info.user_max_objects;
+
+  user_inf.encode(bl_tmp);
+  bl.append(bl_tmp);
+  /* :TODO:End---  */
+#if 0
   do {
     RGWRados::SystemObject source(rgwstore, obj_ctx, obj);
     RGWRados::SystemObject::Read rop(&source);
@@ -95,7 +165,7 @@ int rgw_get_system_obj(RGWRados *rgwstore, RGWObjectCtx& obj_ctx, rgw_bucket& bu
     bl.clear();
     request_len *= 2;
   } while (true);
-
+#endif
   return 0;
 }
 void parse_mime_map_line(const char *start, const char *end)

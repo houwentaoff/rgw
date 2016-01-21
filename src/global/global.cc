@@ -45,6 +45,13 @@ void globals::init()
     rgw_cache_lru_size   = 0;
     rgw_num_rados_handles  = 0;
     rgw_cache_enabled       = false; 
+    rgw_bucket_default_quota_max_objects = 0;
+    rgw_bucket_default_quota_max_size    = 0;
+    rgw_user_default_quota_max_objects   = 0;
+    rgw_user_default_quota_max_size      = 0;
+    sys_user_bucket_root  = "";
+    
+    
 }
 void globals::set_global_params(void *obj, const char *name, const char *val)
 {
@@ -104,7 +111,27 @@ void globals::set_global_params(void *obj, const char *name, const char *val)
     if (string(name) =="rgw_cache_enabled")
     {
         pobj->rgw_cache_enabled = atoi(val) == 1 ? true :false;
-    }   
-    
+    }
+    if (string(name) =="rgw_bucket_default_quota_max_objects")
+    {
+        pobj->rgw_bucket_default_quota_max_objects = atoi(val);
+    }    
+    if (string(name) =="rgw_bucket_default_quota_max_size")
+    {
+        pobj->rgw_bucket_default_quota_max_size = atoi(val);
+    }
+    if (string(name) =="rgw_user_default_quota_max_objects")
+    {
+        pobj->rgw_user_default_quota_max_objects = atoi(val);
+    }
+    if (string(name) =="rgw_user_default_quota_max_size")
+    {
+        pobj->rgw_user_default_quota_max_size = atoi(val);
+    }  
+    if (string(name) =="sys_user_bucket_root")
+    {
+        pobj->sys_user_bucket_root = val;
+    }
+
 }
 

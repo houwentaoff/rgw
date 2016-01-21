@@ -25,6 +25,7 @@
 #include "porting_quota.h"
 #include "porting_bucket.h"
 #include "porting_user.h"
+#include "global/global.h"
 
 #define dout_subsys ceph_subsys_rgw
 
@@ -693,20 +694,20 @@ class RGWQuotaHandlerImpl : public RGWQuotaHandler {
   }
 public:
   RGWQuotaHandlerImpl(RGWRados *_store, bool quota_threads) : store(_store), bucket_stats_cache(_store), user_stats_cache(_store, quota_threads) {
-    if (1/*store->ctx()->_conf->rgw_bucket_default_quota_max_objects >= 0*/) {
-      def_bucket_quota.max_objects = 0;//store->ctx()->_conf->rgw_bucket_default_quota_max_objects;
+    if (G.rgw_bucket_default_quota_max_objects >= 0) {
+      def_bucket_quota.max_objects = G.rgw_bucket_default_quota_max_objects;
       def_bucket_quota.enabled = true;
     }
-    if (1/*store->ctx()->_conf->rgw_bucket_default_quota_max_size >= 0*/) {
-      def_bucket_quota.max_size_kb = 0;//store->ctx()->_conf->rgw_bucket_default_quota_max_size;
+    if (G.rgw_bucket_default_quota_max_size >= 0) {
+      def_bucket_quota.max_size_kb = G.rgw_bucket_default_quota_max_size;
       def_bucket_quota.enabled = true;
     }
-    if (1/*store->ctx()->_conf->rgw_user_default_quota_max_objects >= 0*/) {
-      def_user_quota.max_objects = 0;//store->ctx()->_conf->rgw_user_default_quota_max_objects;
+    if (G.rgw_user_default_quota_max_objects >= 0) {
+      def_user_quota.max_objects = G.rgw_user_default_quota_max_objects;
       def_user_quota.enabled = true;
     }
-    if (1/*store->ctx()->_conf->rgw_user_default_quota_max_size >= 0*/) {
-      def_user_quota.max_size_kb = 0;//store->ctx()->_conf->rgw_user_default_quota_max_size;
+    if (G.rgw_user_default_quota_max_size >= 0) {
+      def_user_quota.max_size_kb = G.rgw_user_default_quota_max_size;
       def_user_quota.enabled = true;
     }
   }

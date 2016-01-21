@@ -653,23 +653,7 @@ done:
 
   return (ret < 0 ? ret : s->err.ret);
 }
-int strip_space(char *str)
-{
-    int len ;
-    if (!str)
-    {
-        return -1;
-    }
 
-    len = strlen(str);
-
-    while (str[len-1] == ' ')
-    {
-        str[len-1] = '\0';
-        len--;
-    }
-    return 0;
-}
 #if 0
 enum
 {
@@ -687,50 +671,6 @@ map_t MAP = {
     {"rgw_max_chunk_size", INT,}
 };
 #endif
-int parse_conf(const char *path, void* obj, void (*cb)(void* obj, const char *name, const char *val))
-{
-    FILE *fp = NULL;
-    char buf [256]={0};
-    char var_name[256]={0};
-    char value[256]={0};
-    int r = -1;
-
-    if (!path)
-    {
-        goto err;
-    }
-
-    if (NULL == (fp = fopen(path, "r")))
-    {
-        goto err;
-    }
-
-    while ((r = fscanf(fp, "%[^\n]s", buf)) == 1)
-    {
-        sscanf(buf, "%s", var_name);
-        if (var_name[0] == '#')
-        {
-            if (fscanf(fp, "%*[\n]") < 0)
-            {
-                printf("skip # fail\n");
-                goto err;
-            }
-            continue;
-        }
-        if ((r = sscanf(buf, "%[^=]=%s", var_name, value))!=2)
-        {
-            goto err;
-        }
-        strip_space(var_name);
-        printf("name[%s] = [%s]\n", var_name, value);
-        cb(obj, var_name, value);
-        r = fscanf(fp, "%*[\n]");
-    }
-    return 0;
-err:
-    return -1;
-}
-typedef void (*FUNC)(void *obj, const char*, const char*);
 /* 
  * ===  FUNCTION  ======================================================================
  *         Name:  main
@@ -753,8 +693,8 @@ int main ( int argc, char *argv[] )
     G.rgw_cache_lru_size            = 10000;
     G.rgw_num_rados_handles         = 1;
     G.rgw_cache_enabled             = false;
-    
-    parse_conf(_PATH_CONF, &G, (FUNC)(&G.set_global_params));
+    G.sys_user_bucket_root          = "/.sys_user_bucket";
+    parse_conf(_PATH_CONF, &G, "=",(FUNC)(&G.set_global_params));
         
     ldout(0, 0)<<"hello world\n"<<dendl;
 //    check_curl();    

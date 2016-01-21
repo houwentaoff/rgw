@@ -80,6 +80,8 @@ struct globals {
     bool rgw_relaxed_s3_bucket_names;
     /* bucket root path */
     std::string buckets_root;
+    /* user info bucket */
+    std::string sys_user_bucket_root;
     /* max chunk size*/
     uint64_t rgw_max_chunk_size;
     /* nax s3cmd put size */
@@ -97,6 +99,10 @@ struct globals {
     uint32_t rgw_num_rados_handles;
     /* */
     bool rgw_cache_enabled;
+    int rgw_bucket_default_quota_max_objects;
+    int rgw_bucket_default_quota_max_size;
+    int rgw_user_default_quota_max_objects;
+    int rgw_user_default_quota_max_size;
 };
 
 #endif

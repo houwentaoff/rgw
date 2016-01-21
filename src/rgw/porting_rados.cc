@@ -1815,23 +1815,23 @@ int RGWRados::get_bucket_stats(rgw_bucket& bucket, string *bucket_ver, string *m
   if (r < 0)
     return r;
  /* :TODO:2016/1/20 17:27:34:hwt: just for test */
-  struct rgw_bucket_category_stats;
+//  struct rgw_bucket_category_stats test;
   
-  rgw_bucket_category_stats.total_size = 1000;//1K 属性中设置
-  rgw_bucket_category_stats.total_size_rounded = 2000;//2K
-  rgw_bucket_category_stats.num_entries = 20;//20个文件
+//  test.total_size = 1000;//1K 属性中设置
+//  test.total_size_rounded = 2000;//2K
+//  test.num_entries = 20;//20个文件
 
 //  rgw_bucket_dir_header.stats.insert( (1, ));
  /* :TODO:End---  */
-  assert(headers.size() == bucket_instance_ids.size());
+//  assert(headers.size() == bucket_instance_ids.size());
 
   map<string, rgw_bucket_dir_header>::iterator iter = headers.begin();
-  map<int, string>::iterator viter = bucket_instance_ids.begin();
+//  map<int, string>::iterator viter = bucket_instance_ids.begin();
   //BucketIndexShardsManager ver_mgr;
   //BucketIndexShardsManager master_ver_mgr;
   //BucketIndexShardsManager marker_mgr;
   char buf[64];
-  for(; iter != headers.end(); ++iter, ++viter) {
+  for(; iter != headers.end(); ++iter/*, ++viter*/) {
     accumulate_raw_stats(iter->second, stats);
     snprintf(buf, sizeof(buf), "%lu", (unsigned long)iter->second.ver);
     //ver_mgr.add(viter->first, string(buf));
@@ -1852,8 +1852,21 @@ int RGWRados::cls_bucket_head(rgw_bucket& bucket, map<string, struct rgw_bucket_
   int r = open_bucket_index(bucket, index_ctx, oids, list_results, -1, bucket_instance_ids);
   if (r < 0)
     return r;
+  string bucket_name = bucket.name;
 
-  r = 0;//CLSRGWIssueGetDirHeader(index_ctx, oids, list_results, cct->_conf->rgw_bucket_index_max_aio)();
+  librados::Rados *rad = get_rados_handle();
+  
+  bufferlist inbl, outbl;
+  string outs;
+
+  bucket.encode(inbl);
+  r = rad->mon_command("get_bucket_head", inbl, &outbl, &outs);
+  
+  bufferlist::iterator it = outbl.begin();
+  struct rgw_cls_list_ret cls_list;
+  cls_list.decode(it);
+  list_results.insert(map<int, struct rgw_cls_list_ret>::value_type(1, cls_list));
+//  r = 0;//CLSRGWIssueGetDirHeader(index_ctx, oids, list_results, cct->_conf->rgw_bucket_index_max_aio)();
   if (r < 0)
     return r;
 

@@ -163,6 +163,8 @@ using ceph::crypto::MD5;
 
 typedef void *RGWAccessHandle;
 
+typedef void (*FUNC)(void *obj, const char*, const char*);
+
 enum http_op {
   OP_GET,
   OP_PUT,
@@ -942,9 +944,9 @@ struct RGWUserInfo
   __u8 system;
   string default_placement;
   list<string> placement_tags;
-//  RGWQuotaInfo bucket_quota;
+  RGWQuotaInfo bucket_quota;
   map<int, string> temp_url_keys;
-//  RGWQuotaInfo user_quota;
+  RGWQuotaInfo user_quota;
 
   RGWUserInfo() : auid(0), suspended(0), max_buckets(RGW_DEFAULT_MAX_BUCKETS), op_mask(RGW_OP_TYPE_ALL), system(0) {}
 
@@ -984,9 +986,9 @@ struct RGWUserInfo
      ::encode(system, bl);
      ::encode(default_placement, bl);
      ::encode(placement_tags, bl);
-//     ::encode(bucket_quota, bl);
+     ::encode(bucket_quota, bl);
      ::encode(temp_url_keys, bl);
-//     ::encode(user_quota, bl);
+     ::encode(user_quota, bl);
      ENCODE_FINISH(bl);
   }
   void decode(bufferlist::iterator& bl) {
@@ -1044,13 +1046,13 @@ struct RGWUserInfo
       ::decode(placement_tags, bl); /* tags of allowed placement rules */
     }
     if (struct_v >= 14) {
-//      ::decode(bucket_quota, bl);
+      ::decode(bucket_quota, bl);
     }
     if (struct_v >= 15) {
      ::decode(temp_url_keys, bl);
     }
     if (struct_v >= 16) {
-//      ::decode(user_quota, bl);
+      ::decode(user_quota, bl);
     }
     DECODE_FINISH(bl);
   }
@@ -1228,7 +1230,7 @@ struct RGWBucketInfo
   bool has_instance_obj;
   RGWObjVersionTracker objv_tracker; /* we don't need to serialize this, for runtime tracking */
   obj_version ep_objv; /* entry point object version, for runtime tracking only */
-//  RGWQuotaInfo quota;
+  RGWQuotaInfo quota;
 
   // Represents the number of bucket index object shards:
   //   - value of 0 indicates there is no sharding (this is by default before this
@@ -1254,7 +1256,7 @@ struct RGWBucketInfo
      ::encode(ct, bl);
      ::encode(placement_rule, bl);
      ::encode(has_instance_obj, bl);
-//     ::encode(quota, bl);
+     ::encode(quota, bl);
      ::encode(num_shards, bl);
      ::encode(bucket_index_shard_hash_type, bl);
      ::encode(requester_pays, bl);
@@ -1278,8 +1280,8 @@ struct RGWBucketInfo
        ::decode(placement_rule, bl);
      if (struct_v >= 8)
        ::decode(has_instance_obj, bl);
-     if (struct_v >= 9);
-//       ::decode(quota, bl);
+     if (struct_v >= 9)
+       ::decode(quota, bl);
      if (struct_v >= 10)
        ::decode(num_shards, bl);
      if (struct_v >= 11)
@@ -1488,5 +1490,6 @@ extern void calc_hmac_sha1(const char *key, int key_len,
 /* destination should be CEPH_CRYPTO_HMACSHA1_DIGESTSIZE bytes long */
 extern bool parse_rfc2616(const char *s, struct tm *t);
 extern time_t string2time(const char *s);
+extern int parse_conf(const char *path, void* obj, const char *delim, void (*cb)(void* obj, const char *name, const char *val));
 
 #endif

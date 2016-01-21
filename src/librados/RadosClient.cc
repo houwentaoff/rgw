@@ -56,6 +56,8 @@
 #include "rgw/porting_common.h"
 #include "include/encoding.h"
 
+#include "cls/rgw/cls_rgw_ops.h"
+
 #include "cgw/cgw.h"
 #include "global/global.h"
 
@@ -76,6 +78,25 @@ int librados::RadosClient::mon_command(const vector<string>& cmd,
 
     for (it = cmd.begin(); it != cmd.end(); it++)
     {
+        if (*it == "get_bucket_head")
+        {
+            struct rgw_cls_list_ret rgw_cls_list;
+            map <uint8_t, rgw_bucket_category_stats> stats;
+            struct rgw_bucket_category_stats status; 
+            rgw_bucket bucket;
+            
+            bufferlist::iterator iter = inbl.begin();
+            bucket.decode(iter);
+            
+            status.total_size = 4096;//当前桶的大小
+            status.total_size_rounded = 8192;//
+            status.num_entries   = 10;//当前桶包含的文件个数
+            
+            stats.insert(map<uint8_t, rgw_bucket_category_stats>::value_type(1, status));
+            rgw_cls_list.dir.header.stats = stats;
+            rgw_cls_list.encode(*outbl);
+            
+        }
         if (*it == "chown")
         {
             bufferlist::iterator iter = inbl.begin();

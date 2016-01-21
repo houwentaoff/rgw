@@ -676,4 +676,68 @@ time_t string2time(const char *s)
     }
     return (time_t)0;
 }
+static int strip_space(char *str)
+{
+    int len ;
+    if (!str)
+    {
+        return -1;
+    }
+
+    len = strlen(str);
+
+    while (str[len-1] == ' ')
+    {
+        str[len-1] = '\0';
+        len--;
+    }
+    return 0;
+}
+
+int parse_conf(const char *path, void* obj, const char *delim, void (*cb)(void* obj, const char *name, const char *val))
+{
+    FILE *fp = NULL;
+    char buf [256]={0};
+    char var_name[256]={0};
+    char value[256]={0};
+    int r = -1;
+    char format[256]={0};
+    
+    if (!path || !delim)
+    {
+        goto err;
+    }
+    
+    sscanf(format, "%%[^%c]%c%%s", *delim, *delim);
+    if (NULL == (fp = fopen(path, "r")))
+    {
+        goto err;
+    }
+
+    while ((r = fscanf(fp, "%[^\n]s", buf)) == 1)
+    {
+        sscanf(buf, "%s", var_name);
+        if (var_name[0] == '#')
+        {
+            if (fscanf(fp, "%*[\n]") < 0)
+            {
+                printf("skip # fail\n");
+                goto err;
+            }
+            continue;
+        }
+        if ((r = sscanf(buf, format/*"%[^=]=%s"*/, var_name, value))!=2)
+        {
+            goto err;
+        }
+        strip_space(var_name);
+        printf("name[%s] %c [%s]\n", *delim, var_name, value);
+        cb(obj, var_name, value);
+        r = fscanf(fp, "%*[\n]");
+    }
+    return 0;
+err:
+    return -1;
+}
+
 

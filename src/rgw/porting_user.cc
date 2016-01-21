@@ -54,7 +54,7 @@ int rgw_get_user_info_from_index(RGWRados *store, string& key, rgw_bucket& bucke
   RGWUID uid;
   RGWObjectCtx obj_ctx(store);
 
-  int ret = rgw_get_system_obj(store, obj_ctx, bucket, key, bl, NULL, &e.mtime);
+  int ret = rgw_get_system_obj(store, obj_ctx, bucket, key, bl, NULL, &e.mtime);//赋值uid (username:bwcpn)
   if (ret < 0)
     return ret;
 
@@ -144,13 +144,17 @@ bool rgw_user_is_authenticated(RGWUserInfo& info)
 
 /**
  * Given an access key, finds the user info associated with it.
+ * 包括用户限额 等所有信息
  * returns: 0 on success, -ERR# on failure (including nonexistence)
  */
 extern int rgw_get_user_info_by_access_key(RGWRados *store, string& access_key, RGWUserInfo& info,
                                            RGWObjVersionTracker *objv_tracker, time_t *pmtime)
 {
   int uid;
+  rgw_bucket sys_user_bucket;
 
+  sys_user_bucket.name = G.sys_user_bucket_root;
+  
   uid = getuid(access_key.c_str());
   if (uid < 0)
   {
@@ -160,6 +164,6 @@ extern int rgw_get_user_info_by_access_key(RGWRados *store, string& access_key, 
   info.display_name = access_key;
   info.user_id = access_key;
   //info.max_buckets = ;
-  return 0;//rgw_get_user_info_from_index(store, access_key, store->zone.user_keys_pool, info, objv_tracker, pmtime);
+  return rgw_get_user_info_from_index(store, access_key, sys_user_bucket/*store->zone.user_keys_pool*/, info, objv_tracker, pmtime);
 }
 

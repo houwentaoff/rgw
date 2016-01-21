@@ -75,7 +75,7 @@ protected:
   RGWQuotaInfo bucket_quota;
   RGWQuotaInfo user_quota;
 
-  virtual int init_quota(){};
+  virtual int init_quota();
 public:
   RGWOp() : s(NULL), dialect_handler(NULL), store(NULL), cors_exist(false) {}
   virtual ~RGWOp() {}
