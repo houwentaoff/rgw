@@ -57,6 +57,7 @@
 #include "include/encoding.h"
 
 #include "cls/rgw/cls_rgw_ops.h"
+#include "rgw/porting_tools.h"
 
 #include "cgw/cgw.h"
 #include "global/global.h"
@@ -65,6 +66,7 @@
 #define dout_subsys ceph_subsys_rados
 #undef dout_prefix
 #define dout_prefix *_dout << "librados: "
+
 
 int librados::RadosClient::mon_command(const vector<string>& cmd,
 				       bufferlist &inbl,
@@ -84,13 +86,18 @@ int librados::RadosClient::mon_command(const vector<string>& cmd,
             map <uint8_t, rgw_bucket_category_stats> stats;
             struct rgw_bucket_category_stats status; 
             rgw_bucket bucket;
-            
+            sys_info info;
+  
             bufferlist::iterator iter = inbl.begin();
             bucket.decode(iter);
-            
-            status.total_size = 4096;//当前桶的大小
-            status.total_size_rounded = 8192;//
-            status.num_entries   = 10;//当前桶包含的文件个数
+
+            string conf_path = G.buckets_root + string("/") + bucket.name
+                + string("/") + string(PROC_BUCKET_PATH "/" PROC_STAT);
+
+            parse_conf(conf_path.c_str(), &info, ":",(FUNC)(&info.get_params));
+            status.total_size = info.total_size;//4096;//当前桶的大小
+            status.total_size_rounded = info.total_size_rounded;//8192;//
+            status.num_entries   = info.num_entries;//10;//当前桶包含的文件个数
             
             stats.insert(map<uint8_t, rgw_bucket_category_stats>::value_type(1, status));
             rgw_cls_list.dir.header.stats = stats;
@@ -168,6 +175,11 @@ int librados::RadosClient::pool_create(string& name, unsigned long long auid,
   sprintf(cmd, "mkdir -p  %s", 
           full_name.c_str());
   ret = shell_simple(cmd);
+  if (!ret)
+  {
+    sys_info info;
+    sys_info::set_params(&info, sys_info::BUCNET_STAT, NULL, NULL);
+  }
   sprintf(cmd, "chown %s:%s %s", 
           entry_point.owner.c_str(),
           entry_point.owner.c_str(),

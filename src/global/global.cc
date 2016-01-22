@@ -45,10 +45,10 @@ void globals::init()
     rgw_cache_lru_size   = 0;
     rgw_num_rados_handles  = 0;
     rgw_cache_enabled       = false; 
-    rgw_bucket_default_quota_max_objects = 0;
-    rgw_bucket_default_quota_max_size    = 0;
-    rgw_user_default_quota_max_objects   = 0;
-    rgw_user_default_quota_max_size      = 0;
+    rgw_bucket_default_quota_max_objects = -1;
+    rgw_bucket_default_quota_max_size    = -1;
+    rgw_user_default_quota_max_objects   = -1;
+    rgw_user_default_quota_max_size      = -1;
     sys_user_bucket_root  = "";
     
     

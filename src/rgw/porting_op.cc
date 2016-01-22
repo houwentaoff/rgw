@@ -1364,6 +1364,14 @@ void RGWPutObj::execute()
   ret = processor->complete(etag, &mtime, 0, attrs, delete_at, if_match, if_nomatch);
 #endif
 done:
+//update stat
+  sys_info info;
+  string stat_path = G.buckets_root + string("/") + s->bucket.name + string("/") + string(PROC_BUCKET_PATH) + string("/") + string(PROC_STAT);
+  info.set_file(stat_path);
+  parse_conf(stat_path.c_str(), &info, ":",(FUNC)(&info.get_params));
+  info.num_entries += 1;
+  info.total_size += s->obj_size;
+  sys_info::set_params(&info, sys_info::BUCNET_STAT, NULL, NULL);
   id = restore_privs(old_uid);
 //  dispose_processor(processor);
 //  perfcounter->tinc(l_rgw_put_lat,

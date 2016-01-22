@@ -35,8 +35,78 @@
 #define READ_CHUNK_LEN (512 * 1024)
 
 static map<string, string> ext_mime_map;
+int sys_info::sync_stat(region_e op, const char *var_name, const char *val)
+{
+    FILE *fp = NULL;
+    char stat_buf[200];
+    
+    fp = fopen(file.c_str(), "wb+");
+    if (!fp)
+    {
+        return -1;
+    }
+    if (op == PART)
+    {
+        
+    }
+    else
+    {
+        sprintf(stat_buf, "total_size:%lld\n"
+            "num_entries:%lld\n"
+            "total_size_rounded:%lld\n",
+            total_size, num_entries, total_size_rounded);
+        fputs(stat_buf, fp);
+        
+    }
+    fclose(fp);
 
-void sys_info::set_params(void* obj, const char *name, const char *val)
+    return 0;
+}
+int sys_info:: sync_user(region_e op, const char *var_name, const char *val)
+{
+    FILE *fp = NULL;
+    char user_buf[512]={0};
+#if 0    
+    fp = fopen(file.c_str(), "wb+");
+    if (!fp)
+    {
+        return -1;
+    }
+    if (op == PART)
+    {
+        
+    }
+    else
+    {
+        sprintf(stat_buf, "total_size:%lld\n"
+            "num_entries:%lld\n"
+            "total_size_rounded:%lld\n",
+            total_size, num_entries, total_size_rounded);
+        fputs(stat_buf, fp);
+        
+    }
+    fclose(fp);
+#endif    
+    return 0;    
+}
+void sys_info::set_params(void* obj, category_e category, const char *name, const char *val)
+{
+    sys_info *pobj = (sys_info *)obj;
+
+    switch(category)
+    {
+        case USER:
+            
+            pobj->sync_user(!name ? FULL : PART, name, val);
+            break;
+        case BUCNET_STAT:
+            pobj->sync_stat(!name ? FULL : PART, name, val);
+            break;
+        default:
+            break;
+    }
+}
+void sys_info::get_params(void* obj, const char *name, const char *val)
 {
     sys_info *pobj = (sys_info *)obj;
     if (string(name) == "display_name")
@@ -61,7 +131,7 @@ void sys_info::set_params(void* obj, const char *name, const char *val)
     }
     if (string(name) == "bucket_enabled")
     {
-        pobj->bucket_enabled = atoi(val) == 1 ? true :false;;
+        pobj->bucket_enabled = atoi(val) == 1 ? true :false;
     }
     if (string(name) == "user_max_size_kb")
     {
@@ -73,8 +143,20 @@ void sys_info::set_params(void* obj, const char *name, const char *val)
     }  
     if (string(name) == "user_enabled")
     {
-        pobj->user_enabled = atoi(val) == 1 ? true :false;;
-    }      
+        pobj->user_enabled = atoi(val) == 1 ? true :false;
+    }
+    if (string(name) == "total_size")
+    {
+        pobj->total_size = atoi(val);
+    }   
+    if (string(name) == "total_size_rounded")
+    {
+        pobj->total_size_rounded = atoi(val);
+    }   
+    if (string(name) == "num_entries")
+    {
+        pobj->num_entries = atoi(val);
+    }       
 }
 
 int rgw_put_system_obj(RGWRados *rgwstore, rgw_bucket& bucket, string& oid, const char *data, size_t size, bool exclusive,
@@ -116,13 +198,14 @@ int rgw_get_system_obj(RGWRados *rgwstore, RGWObjectCtx& obj_ctx, rgw_bucket& bu
 //push uid
   uid.user_id = key;
   uid.encode(bl_tmp);
-  bl.append(bl_tmp);
+  ::encode(uid, bl);
+  //bl.append(bl_tmp);
   bl_tmp.clear();
 //push user info
   string conf_path = G.sys_user_bucket_root + string("/") + string(".") + uid.user_id + string(".conf");
   sys_info info;
   
-  parse_conf(conf_path.c_str(), &info, ":",(FUNC)(&info.set_params));
+  parse_conf(conf_path.c_str(), &info, ":",(FUNC)(&info.get_params));
 
   user_inf.max_buckets = info.max_buckets;
   user_inf.bucket_quota.enabled = info.bucket_enabled;
@@ -135,7 +218,10 @@ int rgw_get_system_obj(RGWRados *rgwstore, RGWObjectCtx& obj_ctx, rgw_bucket& bu
   user_inf.user_quota.max_objects = info.user_max_objects;
 
   user_inf.encode(bl_tmp);
-  bl.append(bl_tmp);
+//  bl.append(bl_tmp);
+
+  ::encode(user_inf, bl);
+  
   if (cache_info)
   {
       cache_info->cache_locator = key;

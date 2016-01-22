@@ -48,6 +48,9 @@ namespace ceph {
 }
 using ceph::crypto::MD5;
 
+#define PROC_BUCKET_PATH                ".bucket"
+#define PROC_STAT                       "stat"
+
 #define RGW_ATTR_PREFIX  "user.rgw."
 
 #define RGW_HTTP_RGWX_ATTR_PREFIX "RGWX_ATTR_"
