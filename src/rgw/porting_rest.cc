@@ -587,11 +587,20 @@ int RGWREST::preprocess(struct req_state *s, RGWClientIO *cio)
   }
 
   s->http_auth = info.env->get("HTTP_AUTHORIZATION");
+ /* :TODO:Monday, January 25, 2016 12:13:14 CST:hwt: Fix DragonDisks 上传文件时一直发送 错误的 continue 信息，原因是先head 再PUT导致， 用s3cmd 不会head而是直接put,则不会导致此现象发生 */
 
-  if (1/*g_conf->rgw_print_continue*/) {
+  /*-----------------------------------------------------------------------------
+   *  rgw print continue
+
+    Description:	Enable 100-continue if it is operational.
+    Type:	Boolean
+    Default:	true
+   *-----------------------------------------------------------------------------*/
+  if (0/*g_conf->rgw_print_continue*/) {
     const char *expect = info.env->get("HTTP_EXPECT");
     s->expect_cont = (expect && !strcasecmp(expect, "100-continue"));
   }
+ /* :TODO:End---  */
   s->op = op_from_method(info.method);
  /* :TODO:2016/1/11 18:23:32:hwt:  x_meta_map 用户签名验证 需要，标准http date请求不用，aws需要用*/
   info.init_meta_info(&s->has_bad_meta);
@@ -736,7 +745,8 @@ void dump_content_length(struct req_state *s, uint64_t len)
   if (r < 0) {
     ldout(s->cct, 0) << "ERROR: s->cio->print() returned err=" << r << dendl;
   }
-  r = s->cio->print("Accept-Ranges: %s\r\n", "bytes");
+//  r = s->cio->print("Accept-Ranges: %s\r\n", "bytes");
+  r = s->cio->print("Accept-Ranges: %s\r\n", "none");
   if (r < 0) {
     ldout(s->cct, 0) << "ERROR: s->cio->print() returned err=" << r << dendl;
   }

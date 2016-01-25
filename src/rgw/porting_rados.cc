@@ -1670,6 +1670,8 @@ int RGWRados::initialize()
 int RGWRados::init_complete()
 {
   int ret = 0;
+  
+  init_unique_trans_id_deps();
 
   quota_handler = RGWQuotaHandler::generate_handler(this, quota_threads);
   binfo_cache.init(this);

@@ -798,7 +798,7 @@ void RGWGetObj::execute()
   if ((fd = ::open(full_path.c_str(), O_RDONLY)) < 0)
   {
       result = -1;
-      ret = ERR_PRECONDITION_FAILED;
+      ret = -ERR_NOT_FOUND;//ERR_PRECONDITION_FAILED;
       goto done_err;
   }
   sprintf(md5_buf, "md5sum %s", full_path.c_str());

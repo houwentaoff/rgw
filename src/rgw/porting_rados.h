@@ -105,6 +105,7 @@ class RGWRados
           std::map<pthread_t, int> rados_map;          
           bool use_gc_thread;
           bool quota_threads;
+          string trans_id_suffix;
 
     public:
       int put_bucket_instance_info(RGWBucketInfo& info, bool exclusive, time_t mtime, map<string, bufferlist> *pattrs);
@@ -180,9 +181,42 @@ class RGWRados
 
       int check_quota(const string& bucket_owner, rgw_bucket& bucket,
                   RGWQuotaInfo& user_quota, RGWQuotaInfo& bucket_quota, uint64_t obj_size);
+      string unique_id(uint64_t unique_num) {
+                  char buf[32];
+                  snprintf(buf, sizeof(buf), ".%llu.%llu", (long long unsigned int)0/*(unsigned long long)instance_id()*/, (unsigned long long)unique_num);
+                  string s = string("test_main_")/* zone.name */ + buf;
+          return s;
+      }
+      /* In order to preserve compability with Swift API, transaction ID
+       * should contain at least 32 characters satisfying following spec:
+       *  - first 21 chars must be in range [0-9a-f]. Swift uses this
+       *    space for storing fragment of UUID obtained through a call to
+       *    uuid4() function of Python's uuid module;
+       *  - char no. 22 must be a hyphen;
+       *  - at least 10 next characters constitute hex-formatted timestamp
+       *    padded with zeroes if necessary. All bytes must be in [0-9a-f]
+       *    range;
+       *  - last, optional part of transaction ID is any url-encoded string
+       *    without restriction on length. */
+      string unique_trans_id(const uint64_t unique_num) {
+          char buf[41]; /* 2 + 21 + 1 + 16 (timestamp can consume up to 16) + 1 */
+          time_t timestamp = time(NULL);
+
+          snprintf(buf, sizeof(buf), "tx%021llx-%010llx",
+                  (unsigned long long)unique_num,
+                  (unsigned long long)timestamp);
+
+          return string(buf) + trans_id_suffix;
+      }
+      void init_unique_trans_id_deps() {
+          char buf[16 + 2 + 1]; /* uint64_t needs 16, 2 hyphens add further 2 */
+
+          snprintf(buf, sizeof(buf), "-%llx-", (unsigned long long)0/*instance_id()*/);
+          url_encode(string(buf) + string("test_main_")/* zone.name */, trans_id_suffix);
+      }
 
       int get_bucket_stats(rgw_bucket& bucket, string *bucket_ver, string *master_ver,
-                  map<RGWObjCategory, RGWStorageStats>& stats, string *max_marker);
+              map<RGWObjCategory, RGWStorageStats>& stats, string *max_marker);
       int cls_bucket_head(rgw_bucket& bucket, map<string, struct rgw_bucket_dir_header>& headers, map<int, string> *bucket_instance_ids = NULL);
 
       /** do all necessary setup of the storage device */
