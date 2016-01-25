@@ -1557,4 +1557,41 @@ int RGWOp::init_quota()
   return 0;
 }
 
+void RGWDeleteObj::pre_exec()
+{
+  rgw_bucket_object_pre_exec(s);
+}
+int RGWDeleteObj::verify_permission()
+{
+  if (!verify_bucket_permission(s, RGW_PERM_WRITE))
+    return -EACCES;
 
+  return 0;
+}
+void RGWDeleteObj::execute()
+{
+    //using namespace librados;
+    string cmd = "rm";
+    uid_t old_uid = 0;
+    int id;
+    bufferlist bl, outbl;
+    string outs;
+    string  full_path = G.buckets_root + string("/") + s->bucket.name +string("/") + s->object.name;
+    ::encode(full_path, bl);
+    
+    librados::Rados *rad = store->get_rados_handle();
+    old_uid = drop_privs(s->user.auid);
+    ret = rad->mon_command(cmd, bl, &outbl, &outs);
+  //update stat
+    sys_info info;
+    string stat_path = G.buckets_root + string("/") + s->bucket.name + string("/") + string(PROC_BUCKET_PATH) + string("/") + string(PROC_STAT);
+    info.set_file(stat_path);
+    parse_conf(stat_path.c_str(), &info, ":",(FUNC)(&info.get_params));
+    info.num_entries -= 1;
+    info.total_size -= s->obj_size;
+    sys_info::set_params(&info, sys_info::BUCNET_STAT, NULL, NULL);
+    id = restore_privs(old_uid);
+    
+    //if (ret == -EEXIST)
+    //    ret = 0;    
+}

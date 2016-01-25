@@ -480,7 +480,7 @@ RGWOp *RGWHandler_ObjStore_Obj_S3::op_delete()
   string upload_id = s->info.args.get("uploadId");
 
   if (upload_id.empty())
-    return NULL;//new RGWDeleteObj_ObjStore_S3;
+    return new RGWDeleteObj_ObjStore_S3;
   else
     return NULL;//new RGWAbortMultipart_ObjStore_S3;
 }
@@ -1009,4 +1009,21 @@ void RGWInitMultipart_ObjStore_S3::send_response()
     rgw_flush_formatter_and_reset(s, s->formatter);
   }
 }
+void RGWDeleteObj_ObjStore_S3::send_response()
+{
+  int r = ret;
+  if (r == -ENOENT)
+    r = 0;
+  if (!r)
+    r = STATUS_NO_CONTENT;
 
+  set_req_state_err(s, r);
+  dump_errno(s);
+  if (!version_id.empty()) {
+    dump_string_header(s, "x-amz-version-id", version_id.c_str());
+  }
+  if (delete_marker) {
+    dump_string_header(s, "x-amz-delete-marker", "true");
+  }
+  end_header(s, this);
+}

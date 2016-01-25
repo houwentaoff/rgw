@@ -193,14 +193,11 @@ int rgw_get_system_obj(RGWRados *rgwstore, RGWObjectCtx& obj_ctx, rgw_bucket& bu
   /* :TODO:2016/1/21 16:35:13:hwt:  获取用户头信息*/
   RGWUID uid;
   RGWUserInfo user_inf;
-  bufferlist  bl_tmp;
     
 //push uid
   uid.user_id = key;
-  uid.encode(bl_tmp);
   ::encode(uid, bl);
   //bl.append(bl_tmp);
-  bl_tmp.clear();
 //push user info
   string conf_path = G.sys_user_bucket_root + string("/") + string(".") + uid.user_id + string(".conf");
   sys_info info;
@@ -216,9 +213,7 @@ int rgw_get_system_obj(RGWRados *rgwstore, RGWObjectCtx& obj_ctx, rgw_bucket& bu
   user_inf.user_quota.enabled = info.user_enabled;
   user_inf.user_quota.max_size_kb =  info.user_max_size_kb;
   user_inf.user_quota.max_objects = info.user_max_objects;
-
-  user_inf.encode(bl_tmp);
-//  bl.append(bl_tmp);
+  user_inf.auid = getuid(key.c_str());
 
   ::encode(user_inf, bl);
   

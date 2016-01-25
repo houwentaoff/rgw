@@ -105,7 +105,8 @@ int setvol(char *params,int sock_fd, ssize_t (*complete)(int, const void *, size
 	WebVolInfo volumeInfo;
     byte  type = 0;//add 
     WebUserInfo webInfo;
-    
+
+    webInfo.llTotalCap = 10;
     volumeInfo.strName = get_val(params, "vol_name");
     webInfo.strName = get_val(params, "owner");
     volumeInfo.vUser.push_back(webInfo);

@@ -80,6 +80,15 @@ int librados::RadosClient::mon_command(const vector<string>& cmd,
 
     for (it = cmd.begin(); it != cmd.end(); it++)
     {
+        if (*it == "rm")
+        {
+            bufferlist::iterator iter = inbl.begin();
+            string path;
+            ::decode(path, iter);
+            sprintf(scmd, "rm %s -rf", path.c_str());
+            shell_simple(scmd);
+            ret = 0;
+        }
         if (*it == "get_bucket_head")
         {
             struct rgw_cls_list_ret rgw_cls_list;
@@ -112,7 +121,7 @@ int librados::RadosClient::mon_command(const vector<string>& cmd,
             entry_point.decode(iter);
             
 #ifdef FICS
-
+            ret = -ENOENT;
 #else
             string full_name = G.buckets_root + string("/") + entry_point.bucket.name; 
             struct passwd *pwd;

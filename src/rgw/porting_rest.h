@@ -145,7 +145,11 @@ public:
   RGWInitMultipart_ObjStore() {}
   ~RGWInitMultipart_ObjStore() {}
 };
-
+class RGWDeleteObj_ObjStore : public RGWDeleteObj {
+public:
+  RGWDeleteObj_ObjStore() {}
+  ~RGWDeleteObj_ObjStore() {}
+};
 static const int64_t NO_CONTENT_LENGTH = -1;
 
 extern void set_req_state_err(struct req_state *s, int err_no);
@@ -180,5 +184,6 @@ extern void dump_last_modified(struct req_state *s, time_t t);
 extern void dump_etag(struct req_state *s, const char *etag);
 extern void dump_time_header(struct req_state *s, const char *name, time_t t);
 extern void rgw_rest_init(CephContext *cct, void * /*RGWRegion& */region);
+extern void dump_string_header(struct req_state *s, const char *name, const char *val);
 
 #endif

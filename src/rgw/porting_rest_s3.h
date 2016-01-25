@@ -193,6 +193,13 @@ public:
   int get_params();
   void send_response();
 };
+class RGWDeleteObj_ObjStore_S3 : public RGWDeleteObj_ObjStore {
+public:
+  RGWDeleteObj_ObjStore_S3() {}
+  ~RGWDeleteObj_ObjStore_S3() {}
+
+  void send_response();
+};
 
 #endif
 

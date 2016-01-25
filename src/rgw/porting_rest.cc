@@ -1047,4 +1047,11 @@ void dump_last_modified(struct req_state *s, time_t t)
 {
   dump_time_header(s, "Last-Modified", t);
 }
+void dump_string_header(struct req_state *s, const char *name, const char *val)
+{
+  int r = s->cio->print("%s: %s\r\n", name, val);
+  if (r < 0) {
+    ldout(s->cct, 0) << "ERROR: s->cio->print() returned err=" << r << dendl;
+  }
+}
 

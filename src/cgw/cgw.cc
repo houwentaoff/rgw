@@ -240,7 +240,7 @@ int post_msg(int msg_id, const char payload[], int payload_size, bool bclose)
 string pack(const char *name, const char *value)
 {
     char buf[512];
-    if (!value || *value)
+    if (!name || !value)
     {
         return string("");
     }
@@ -253,7 +253,15 @@ string get_val(const char *s, const char *key)
     const char *pos = s;
     char buf[256]={0};
     bool exist = false;
+    int len = 0;
 
+    if (!s || !key)
+    {
+        return string("");
+    }
+    
+    len = strlen (key);
+    
     while (pos && *pos)
     {
         val = strstr(pos, key);
@@ -261,6 +269,7 @@ string get_val(const char *s, const char *key)
         {
             goto done;
         }
+        val += len;
         if (0 != strncmp(val, " = ", strlen(" = ")))
         {
             pos = val;

@@ -487,5 +487,25 @@ public:
     upload_id = "";
   }
 };
+class RGWDeleteObj : public RGWOp {
+protected:
+  int ret;
+  bool delete_marker;
+  string version_id;
+
+public:
+  RGWDeleteObj() : ret(0), delete_marker(false) {}
+
+  int verify_permission();
+  void pre_exec();
+  void execute();
+
+  virtual void send_response() = 0;
+  virtual const string name() { return "delete_obj"; }
+  virtual RGWOpType get_type() { return RGW_OP_DELETE_OBJ; }
+  virtual uint32_t op_mask() { return RGW_OP_TYPE_DELETE; }
+  virtual bool need_object_expiration() { return false; }
+};
+
 
 #endif
