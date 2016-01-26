@@ -104,12 +104,23 @@ int setvol(char *params,int sock_fd, ssize_t (*complete)(int, const void *, size
 	string strInfo;
 	WebVolInfo volumeInfo;
     byte  type = 0;//add 
-    WebUserInfo webInfo;
+    WebUserInfo userInfo;
+    volumeInfo.strOldName ="";
+    volumeInfo.llUsedCap = 0;
+    volumeInfo.warnType = 0;
+    volumeInfo.llWarnLevel = 80;
 
-    webInfo.llTotalCap = 10;
+    volumeInfo.llTotalCap = 10240;
     volumeInfo.strName = get_val(params, "vol_name");
-    webInfo.strName = get_val(params, "owner");
-    volumeInfo.vUser.push_back(webInfo);
+    //userInfo.uUserId 
+    userInfo.uLimit =1000;
+    userInfo.llTotalCap = 100;
+    userInfo.llUsedCap = 0;
+    userInfo.warnType  = 0;
+    userInfo.llWarnLevel = 80;
+    userInfo.strName = get_val(params, "owner");
+    //vOwnGroup.push_back("") = "";
+    volumeInfo.vUser.push_back(userInfo);
     ret = Fi_ModifyVolume(type, volumeInfo, strInfo);
     if (!ret)
     {

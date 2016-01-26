@@ -118,19 +118,23 @@ int librados::RadosClient::mon_command(const vector<string>& cmd,
             bufferlist::iterator iter = inbl.begin();
 
             RGWBucketEntryPoint entry_point;
+            //RGWBucketInfo info;
+            //info.decode(iter);
             entry_point.decode(iter);
             
 #ifdef FICS
             ret = -ENOENT;
 #else
             string full_name = G.buckets_root + string("/") + entry_point.bucket.name; 
+            //string full_name = G.buckets_root + string("/") + info.bucket.name; 
+
             struct passwd *pwd;
 
             pwd = getpwnam(entry_point.owner.c_str());
 //            uid_t uid = getuid(entry_point.owner.c_str());
             if (!pwd)
             {
-              ret = -errno;
+              ret = -ENOENT;//errno;
             }
             else
             {
@@ -138,7 +142,12 @@ int librados::RadosClient::mon_command(const vector<string>& cmd,
               {
                 ret = -errno;
               }
-            }
+              string bucket_stat = full_name + string("/.bucket");
+              if (chown(bucket_stat.c_str(), pwd->pw_uid, pwd->pw_gid) < 0)
+              {
+                ;//ret = -errno;
+              }
+              }
 //            sprintf(scmd, "chown %s:%s %s", 
 //            entry_point.owner.c_str(),
 //            entry_point.owner.c_str(),
@@ -181,18 +190,23 @@ int librados::RadosClient::pool_create(string& name, unsigned long long auid,
   char cmd[256];
   int ret =0;
   string full_name = G.buckets_root + string("/") + entry_point.bucket.name; 
-  sprintf(cmd, "mkdir -p  %s", 
-          full_name.c_str());
+  sprintf(cmd, "mkdir -p  %s && mkdir -p %s/.bucket", 
+          full_name.c_str(), full_name.c_str());
   ret = shell_simple(cmd);
   if (!ret)
   {
     sys_info info;
     sys_info::set_params(&info, sys_info::BUCNET_STAT, NULL, NULL);
   }
-  sprintf(cmd, "chown %s:%s %s", 
+  sprintf(cmd, "chown %s:%s %s &&"
+               "chown %s:%s %s/.bucket", 
           entry_point.owner.c_str(),
           entry_point.owner.c_str(),
-          full_name.c_str());  
+          full_name.c_str(),
+          entry_point.owner.c_str(),
+          entry_point.owner.c_str(),
+          full_name.c_str()
+  );  
   ret = shell_simple(cmd);  
 #endif    
     return 0;

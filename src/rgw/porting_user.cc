@@ -152,7 +152,8 @@ extern int rgw_get_user_info_by_access_key(RGWRados *store, string& access_key, 
 {
   int uid;
   rgw_bucket sys_user_bucket;
-
+  int ret = 0;
+  
   sys_user_bucket.name = G.sys_user_bucket_root;
   
   uid = getuid(access_key.c_str());
@@ -164,7 +165,11 @@ extern int rgw_get_user_info_by_access_key(RGWRados *store, string& access_key, 
   info.display_name = access_key;
   info.user_id = access_key;
   //info.max_buckets = ;
-  return rgw_get_user_info_from_index(store, access_key, sys_user_bucket/*store->zone.user_keys_pool*/, info, objv_tracker, pmtime);
+  ret = rgw_get_user_info_from_index(store, access_key, sys_user_bucket/*store->zone.user_keys_pool*/, info, objv_tracker, pmtime);
+
+  info.display_name = access_key;
+  info.user_id = access_key;
+  return ret;
 }
 struct RGWUserCompleteInfo {
   RGWUserInfo info;

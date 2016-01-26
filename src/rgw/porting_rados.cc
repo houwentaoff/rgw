@@ -1773,8 +1773,8 @@ int RGWRados::put_system_obj(void *ctx, rgw_obj& obj, const char *data, size_t l
     librados::Rados *rad = get_rados_handle();
     cmd = "chown";
     ret = rad->mon_command(cmd, bl, &outbl, &outs);
-    if (ret == -EEXIST)
-        ret = 0;
+    //if (ret == -EEXIST)
+    //    ret = 0;
 
     return ret;    //return put_system_obj_impl(obj, len, mtime, attrs, flags, bl, objv_tracker, set_mtime);    
 }
