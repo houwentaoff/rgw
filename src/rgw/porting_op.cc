@@ -1002,7 +1002,7 @@ void RGWCreateBucket::execute()
     }
     s->bucket = info.bucket;
   }
-
+#if 0
   ret = rgw_link_bucket(store, s->user.user_id, s->bucket, info.creation_time, false);//关联bucket 创建bucket(文件夹，卷)
   if (ret && !existed && ret != -EEXIST) {  /* if it exists (or previously existed), don't remove it! */
     ret = rgw_unlink_bucket(store, s->user.user_id, s->bucket.name);
@@ -1012,6 +1012,7 @@ void RGWCreateBucket::execute()
   } else if (ret == -EEXIST || (ret == 0 && existed)) {
     ret = -ERR_BUCKET_EXISTS;
   }
+#endif
 }
 
 int RGWDeleteBucket::verify_permission()
@@ -1576,11 +1577,19 @@ void RGWDeleteObj::execute()
     int id;
     bufferlist bl, outbl;
     string outs;
-    string  full_path = G.buckets_root + string("/") + s->bucket.name +string("/") + s->object.name;
+    struct stat buf;
+    string  full_path = "";
+    memset(&buf, 0, sizeof (struct stat));
+    
+    full_path += G.buckets_root + string("/") + s->bucket.name +string("/") + s->object.name;
     ::encode(full_path, bl);
     
     librados::Rados *rad = store->get_rados_handle();
     old_uid = drop_privs(s->user.auid);
+    if (0 != ::stat(full_path.c_str(), &buf))
+    {
+        return;
+    }
     ret = rad->mon_command(cmd, bl, &outbl, &outs);
   //update stat
     sys_info info;
@@ -1588,7 +1597,7 @@ void RGWDeleteObj::execute()
     info.set_file(stat_path);
     parse_conf(stat_path.c_str(), &info, ":",(FUNC)(&info.get_params));
     info.num_entries -= 1;
-    info.total_size -= s->obj_size;
+    info.total_size -= buf.st_size;//s->obj_size;
     sys_info::set_params(&info, sys_info::BUCNET_STAT, NULL, NULL);
     id = restore_privs(old_uid);
     
