@@ -200,6 +200,20 @@ public:
 
   void send_response();
 };
+class RGWStatBucket_ObjStore_S3 : public RGWStatBucket_ObjStore {
+public:
+  RGWStatBucket_ObjStore_S3() {}
+  ~RGWStatBucket_ObjStore_S3() {}
+
+  void send_response();
+};
+class RGWGetACLs_ObjStore_S3 : public RGWGetACLs_ObjStore {
+public:
+  RGWGetACLs_ObjStore_S3() {}
+  ~RGWGetACLs_ObjStore_S3() {}
+
+  void send_response();
+};
 
 #endif
 

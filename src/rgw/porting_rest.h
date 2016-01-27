@@ -150,6 +150,16 @@ public:
   RGWDeleteObj_ObjStore() {}
   ~RGWDeleteObj_ObjStore() {}
 };
+class RGWStatBucket_ObjStore : public RGWStatBucket {
+public:
+  RGWStatBucket_ObjStore() {}
+  ~RGWStatBucket_ObjStore() {}
+};
+class RGWGetACLs_ObjStore : public RGWGetACLs {
+public:
+  RGWGetACLs_ObjStore() {}
+  ~RGWGetACLs_ObjStore() {}
+};
 static const int64_t NO_CONTENT_LENGTH = -1;
 
 extern void set_req_state_err(struct req_state *s, int err_no);

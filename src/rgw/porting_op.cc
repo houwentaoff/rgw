@@ -1604,3 +1604,81 @@ void RGWDeleteObj::execute()
     //if (ret == -EEXIST)
     //    ret = 0;    
 }
+int RGWStatBucket::verify_permission()
+{
+  if (!verify_bucket_permission(s, RGW_PERM_READ))
+    return -EACCES;
+
+  return 0;
+}
+void RGWStatBucket::pre_exec()
+{
+  rgw_bucket_object_pre_exec(s);
+}
+void RGWStatBucket::execute()
+{
+  RGWUserBuckets buckets;
+  bucket.bucket = s->bucket;
+  buckets.add(bucket);
+  map<string, RGWBucketEnt>& m = buckets.get_buckets();
+  ret = 0;//store->update_containers_stats(m);
+  if (!ret)
+    ret = -EEXIST;
+  if (ret > 0) {
+    ret = 0;
+    map<string, RGWBucketEnt>::iterator iter = m.find(bucket.bucket.name);
+    if (iter != m.end()) {
+      bucket = iter->second;
+    } else {
+      ret = -EINVAL;
+    }
+  }
+}
+int RGWGetACLs::verify_permission()
+{
+  bool perm;
+  if (!s->object.empty()) {
+    perm = true;//perm = verify_object_permission(s, RGW_PERM_READ_ACP);
+  } else {
+    perm = verify_bucket_permission(s, RGW_PERM_READ_ACP);
+  }
+  if (!perm)
+    return -EACCES;
+
+  return 0;
+}
+void RGWGetACLs::pre_exec()
+{
+  rgw_bucket_object_pre_exec(s);
+}
+void RGWGetACLs::execute()
+{
+  acls = "<AccessControlPolicy xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">";
+  acls += "<Owner> <ID>bwcpn</ID></Owner>";
+  acls += "<AccessControlList>"
+            "<Grant>"
+                "<Grantee xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"Canonical User\">"
+                    "<ID>bwcpn</ID><DisplayName>bwcpn houu</DisplayName>"
+                "</Grantee>"
+                "<Permission>FULL_CONTROL</Permission>"
+            "</Grant>"
+          "</AccessControlList>";
+  acls += "</AccessControlPolicy>";
+
+  stringstream ss;
+  ss<<"<AccessControlPolicy xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">"
+     "<Owner> <ID>"<<"bwcpn"<<"</ID></Owner>";
+  ss<<"<AccessControlList>"
+            "<Grant>"
+                "<Grantee xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"Canonical User\">"
+                    "<ID>"<<"bwcpn"<<"</ID><DisplayName>"<<"bwcpn houu"<<"</DisplayName>"
+                "</Grantee>"
+                "<Permission>FULL_CONTROL</Permission>"
+            "</Grant>"
+          "</AccessControlList>";
+  ss<<"</AccessControlPolicy>";                  
+  //RGWAccessControlPolicy *acl = (!s->object.empty() ? s->object_acl : s->bucket_acl);
+  //RGWAccessControlPolicy_S3 *s3policy = static_cast<RGWAccessControlPolicy_S3 *>(acl);
+  //s3policy->to_xml(ss);
+  acls = ss.str();
+}

@@ -507,5 +507,40 @@ public:
   virtual bool need_object_expiration() { return false; }
 };
 
+class RGWStatBucket : public RGWOp {
+protected:
+  int ret;
+  RGWBucketEnt bucket;
+
+public:
+  RGWStatBucket() : ret(0) {}
+  ~RGWStatBucket() {}
+
+  int verify_permission();
+  void pre_exec();
+  void execute();
+
+  virtual void send_response() = 0;
+  virtual const string name() { return "stat_bucket"; }
+  virtual RGWOpType get_type() { return RGW_OP_STAT_BUCKET; }
+  virtual uint32_t op_mask() { return RGW_OP_TYPE_READ; }
+};
+class RGWGetACLs : public RGWOp {
+protected:
+  int ret;
+  string acls;
+
+public:
+  RGWGetACLs() : ret(0) {}
+
+  int verify_permission();
+  void pre_exec();
+  void execute();
+
+  virtual void send_response() = 0;
+  virtual const string name() { return "get_acls"; }
+  virtual RGWOpType get_type() { return RGW_OP_GET_ACLS; }
+  virtual uint32_t op_mask() { return RGW_OP_TYPE_READ; }
+};
 
 #endif
