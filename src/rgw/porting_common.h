@@ -1382,7 +1382,7 @@ struct req_state {
     string bucket_name_str;
     rgw_obj_key object;
     string src_bucket_name;
-//    rgw_obj_key src_object;
+    rgw_obj_key src_object;
 //    ACLOwner bucket_owner;
 //    ACLOwner owner;
 

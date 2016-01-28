@@ -144,6 +144,46 @@ int setvol(char *params,int sock_fd, ssize_t (*complete)(int, const void *, size
 }
 int delvol(char *params,int sock_fd, ssize_t (*complete)(int, const void *, size_t))
 {
+    bool ret;
+	string strInfo;
+	WebVolInfo volumeInfo;
+    byte  type = 2;//del 
+    WebUserInfo userInfo;
+    volumeInfo.strOldName ="";
+    volumeInfo.llUsedCap = 0;
+    volumeInfo.warnType = 0;
+    volumeInfo.llWarnLevel = 80;
+
+    volumeInfo.llTotalCap = 10240;
+    volumeInfo.strName = get_val(params, "vol_name");
+    //userInfo.uUserId 
+    userInfo.uLimit =1000;
+    userInfo.llTotalCap = 100;
+    userInfo.llUsedCap = 0;
+    userInfo.warnType  = 0;
+    userInfo.llWarnLevel = 80;
+    userInfo.strName = get_val(params, "owner");
+    //vOwnGroup.push_back("") = "";
+    volumeInfo.vUser.push_back(userInfo);
+    ret = Fi_ModifyVolume(type, volumeInfo, strInfo);
+    if (!ret)
+    {
+        complete(sock_fd, strInfo.c_str(), strInfo.size()+1);
+        printf("[client] modify vol fail\n"
+               "\t\t\t=============\t\t\n"
+               "%s"
+               "\t\t\t=============\t\t\n"
+               "info[%s]\n", params, strInfo.c_str());
+    }
+    else
+    {
+        complete(sock_fd, "", 1);
+        printf("[client] modify vol success\n"
+               "\t\t\t=============\t\t\n"
+               "%s"
+               "\t\t\t=============\t\t\n"
+               "info[%s]\n", params, strInfo.c_str());
+     }
     return 0;
 }
 /* 
@@ -158,7 +198,8 @@ int main ( int argc, char *argv[] )
     int fd = -1;
     pthread_t id,com_id; 
     pthread_attr_t attr[3];
-
+    memset(&cgw_ops, 0, sizeof(cgw_ops));
+    
     cgw_ops.getpawd = getpawd;
     cgw_ops.getvol  = getvol;
     cgw_ops.setvol  = setvol;

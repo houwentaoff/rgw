@@ -92,6 +92,11 @@ class RGWRados
     public:
         RGWMetadataManager *meta_mgr;
         RGWQuotaHandler *quota_handler;
+        enum AttrsMod {
+              ATTRSMOD_NONE    = 0,
+              ATTRSMOD_REPLACE = 1,
+              ATTRSMOD_MERGE   = 2
+        };
     public:
         RGWRados():quota_handler(NULL),meta_mgr(NULL),rados(NULL), next_rados_handle(0),num_rados_handles(0), handle_lock("rados_handle_lock"){/*  meta_mgr = new RGWMetadataManager(cct, this);*/}
         ~RGWRados(){}

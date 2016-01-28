@@ -348,7 +348,7 @@ int RGWHandler_ObjStore_S3::init(RGWRados *store, struct req_state *s, RGWClient
 
   s->copy_source = s->info.env->get("HTTP_X_AMZ_COPY_SOURCE");
   if (s->copy_source) {
-    ret = 0;//= RGWCopyObj::parse_copy_location(s->copy_source, s->src_bucket_name, s->src_object);
+    ret = RGWCopyObj::parse_copy_location(s->copy_source, s->src_bucket_name, s->src_object);
     if (!ret) {
       ldout(s->cct, 0) << "failed to parse copy location" << dendl;
       return -EINVAL;
@@ -472,7 +472,7 @@ RGWOp *RGWHandler_ObjStore_Obj_S3::op_put()
   if (!s->copy_source)
     return new RGWPutObj_ObjStore_S3;
   else
-    return NULL;//new RGWCopyObj_ObjStore_S3;
+    return new RGWCopyObj_ObjStore_S3;
 }
 
 RGWOp *RGWHandler_ObjStore_Obj_S3::op_delete()
@@ -1056,5 +1056,108 @@ void RGWGetACLs_ObjStore_S3::send_response()
   dump_start(s);
   rgw_flush_formatter(s, s->formatter);
   s->cio->write(acls.c_str(), acls.size());
+}
+int RGWCopyObj_ObjStore_S3::init_dest_policy()
+{
+//  RGWAccessControlPolicy_S3 s3policy(s->cct);
+
+  /* build a policy for the target object */
+  int r = 0;//create_s3_policy(s, store, s3policy, s->owner);
+  if (r < 0)
+    return r;
+
+//  dest_policy = s3policy;
+
+  return 0;
+}
+int RGWCopyObj_ObjStore_S3::get_params()
+{
+  if (s->info.env->get("HTTP_X_AMZ_COPY_SOURCE_RANGE")) {
+    return -ERR_NOT_IMPLEMENTED;
+  }
+
+  if_mod = s->info.env->get("HTTP_X_AMZ_COPY_IF_MODIFIED_SINCE");
+  if_unmod = s->info.env->get("HTTP_X_AMZ_COPY_IF_UNMODIFIED_SINCE");
+  if_match = s->info.env->get("HTTP_X_AMZ_COPY_IF_MATCH");
+  if_nomatch = s->info.env->get("HTTP_X_AMZ_COPY_IF_NONE_MATCH");
+
+  src_bucket_name = s->src_bucket_name;
+  src_object = s->src_object;
+  dest_bucket_name = s->bucket.name;
+  dest_object = s->object.name;
+
+  if (s->system_request) {
+    source_zone = s->info.args.get(RGW_SYS_PARAM_PREFIX "source-zone");
+    if (!source_zone.empty()) {
+      client_id = s->info.args.get(RGW_SYS_PARAM_PREFIX "client-id");
+      op_id = s->info.args.get(RGW_SYS_PARAM_PREFIX "op-id");
+
+      if (client_id.empty() || op_id.empty()) {
+        ldout(s->cct, 0) << RGW_SYS_PARAM_PREFIX "client-id or " RGW_SYS_PARAM_PREFIX "op-id were not provided, required for intra-region copy" << dendl;
+        return -EINVAL;
+      }
+    }
+  }
+
+  const char *md_directive = s->info.env->get("HTTP_X_AMZ_METADATA_DIRECTIVE");
+  if (md_directive) {
+    if (strcasecmp(md_directive, "COPY") == 0) {
+      attrs_mod = RGWRados::ATTRSMOD_NONE;
+    } else if (strcasecmp(md_directive, "REPLACE") == 0) {
+      attrs_mod = RGWRados::ATTRSMOD_REPLACE;
+    } else if (!source_zone.empty()) {
+      attrs_mod = RGWRados::ATTRSMOD_NONE; // default for intra-region copy
+    } else {
+      ldout(s->cct, 0) << "invalid metadata directive" << dendl;
+      return -EINVAL;
+    }
+  }
+
+  if (source_zone.empty() &&
+      (dest_bucket_name.compare(src_bucket_name) == 0) &&
+      (dest_object.compare(src_object.name) == 0) &&
+      src_object.instance.empty() &&
+      (attrs_mod != RGWRados::ATTRSMOD_REPLACE)) {
+    /* can only copy object into itself if replacing attrs */
+    ldout(s->cct, 0) << "can't copy object into itself if not replacing attrs" << dendl;
+    return -ERR_INVALID_REQUEST;
+  }
+  return 0;
+}
+
+void RGWCopyObj_ObjStore_S3::send_partial_response(off_t ofs)
+{
+  if (!sent_header) {
+    if (ret)
+    set_req_state_err(s, ret);
+    dump_errno(s);
+
+    end_header(s, this, "application/xml");
+    if (ret == 0) {
+      s->formatter->open_object_section("CopyObjectResult");
+    }
+    sent_header = true;
+  } else {
+    /* Send progress field. Note that this diverge from the original S3
+     * spec. We do this in order to keep connection alive.
+     */
+    s->formatter->dump_int("Progress", (uint64_t)ofs);
+  }
+  rgw_flush_formatter(s, s->formatter);
+}
+
+void RGWCopyObj_ObjStore_S3::send_response()
+{
+  if (!sent_header)
+    send_partial_response(0);
+
+  if (ret == 0) {
+    dump_time(s, "LastModified", &mtime);
+    if (!etag.empty()) {
+      s->formatter->dump_string("ETag", etag);
+    }
+    s->formatter->close_section();
+    rgw_flush_formatter_and_reset(s, s->formatter);
+  }
 }
 

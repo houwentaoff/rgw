@@ -1089,20 +1089,18 @@ void RGWDeleteBucket::execute()
     return;
   }
 #ifdef FICS
-#if 0
+#if 1
   int con_fd;
-  char key_buf[256];
-  con_fd = post_msg(CGW_MSG_GET_PASSWORD, auth_id.c_str(), auth_id.size()+1, false);
-  if (1 == recv_msg(con_fd, key_buf, true))
+  char del_buf[256];
+  con_fd = post_msg(CGW_MSG_DEL_VOLUME, s->bucket_name_str.c_str(), s->bucket_name_str.size()+1, false);
+  if (1 == recv_msg(con_fd, del_buf, true))
   {
       //not found
-      dout(0) << "ERROR: access key not encoded in user info" << dendl;
-      return -EPERM;
+      dout(0) << "ERROR: del vol fail" << dendl;
+      ret = ERR_INTERNAL_ERROR;
+      return;
   }
-    else
-    {
-        k.key = key_buf;
-    }
+
 #endif
 #else
   sprintf(cmd_buf, "rm -rf %s/%s", G.buckets_root.c_str(), s->bucket_name_str.c_str());
@@ -1579,6 +1577,8 @@ void RGWDeleteObj::execute()
     string outs;
     struct stat buf;
     string  full_path = "";
+    string stat_path="";
+    sys_info info;
     memset(&buf, 0, sizeof (struct stat));
     
     full_path += G.buckets_root + string("/") + s->bucket.name +string("/") + s->object.name;
@@ -1588,19 +1588,20 @@ void RGWDeleteObj::execute()
     old_uid = drop_privs(s->user.auid);
     if (0 != ::stat(full_path.c_str(), &buf))
     {
-        return;
+        goto done;
     }
     ret = rad->mon_command(cmd, bl, &outbl, &outs);
   //update stat
-    sys_info info;
-    string stat_path = G.buckets_root + string("/") + s->bucket.name + string("/") + string(PROC_BUCKET_PATH) + string("/") + string(PROC_STAT);
+    
+    stat_path += G.buckets_root + string("/") + s->bucket.name + string("/") + string(PROC_BUCKET_PATH) + string("/") + string(PROC_STAT);
     info.set_file(stat_path);
     parse_conf(stat_path.c_str(), &info, ":",(FUNC)(&info.get_params));
     info.num_entries -= 1;
     info.total_size -= buf.st_size;//s->obj_size;
     sys_info::set_params(&info, sys_info::BUCNET_STAT, NULL, NULL);
+done:
     id = restore_privs(old_uid);
-    
+    return ;
     //if (ret == -EEXIST)
     //    ret = 0;    
 }
@@ -1681,4 +1682,215 @@ void RGWGetACLs::execute()
   //RGWAccessControlPolicy_S3 *s3policy = static_cast<RGWAccessControlPolicy_S3 *>(acl);
   //s3policy->to_xml(ss);
   acls = ss.str();
+}
+bool RGWCopyObj::parse_copy_location(const string& url_src, string& bucket_name, rgw_obj_key& key)
+{
+  string name_str;
+  string params_str;
+
+  int pos = url_src.find('?');
+  if (pos < 0) {
+    name_str = url_src;
+  } else {
+    name_str = url_src.substr(0, pos);
+    params_str = url_src.substr(pos + 1);
+  }
+
+
+  string dec_src;
+
+  url_decode(name_str, dec_src);
+  const char *src = dec_src.c_str();
+
+  if (*src == '/') ++src;
+
+  string str(src);
+
+  pos = str.find("/");
+  if (pos <= 0)
+    return false;
+
+  bucket_name = str.substr(0, pos);
+  key.name = str.substr(pos + 1);
+
+  if (key.name.empty()) {
+    return false;
+  }
+
+  if (!params_str.empty()) {
+    RGWHTTPArgs args;
+    args.set(params_str);
+    args.parse();
+
+    key.instance = args.get("versionId", NULL);
+  }
+
+  return true;
+}
+static void format_xattr(std::string &xattr)
+{
+  /* If the extended attribute is not valid UTF-8, we encode it using quoted-printable
+   * encoding.
+   */
+  if ((check_utf8(xattr.c_str(), xattr.length()) != 0) ||
+      (check_for_control_characters(xattr.c_str(), xattr.length()) != 0)) {
+    static const char MIME_PREFIX_STR[] = "=?UTF-8?Q?";
+    static const int MIME_PREFIX_LEN = sizeof(MIME_PREFIX_STR) - 1;
+    static const char MIME_SUFFIX_STR[] = "?=";
+    static const int MIME_SUFFIX_LEN = sizeof(MIME_SUFFIX_STR) - 1;
+    int mlen = mime_encode_as_qp(xattr.c_str(), NULL, 0);
+    char *mime = new char[MIME_PREFIX_LEN + mlen + MIME_SUFFIX_LEN + 1];
+    strcpy(mime, MIME_PREFIX_STR);
+    mime_encode_as_qp(xattr.c_str(), mime + MIME_PREFIX_LEN, mlen);
+    strcpy(mime + MIME_PREFIX_LEN + (mlen - 1), MIME_SUFFIX_STR);
+    xattr.assign(mime);
+    delete [] mime;
+  }
+}
+
+/**
+ * Get the HTTP request metadata out of the req_state as a
+ * map(<attr_name, attr_contents>, where attr_name is RGW_ATTR_PREFIX.HTTP_NAME)
+ * s: The request state
+ * attrs: will be filled up with attrs mapped as <attr_name, attr_contents>
+ *
+ */
+static void rgw_get_request_metadata(CephContext *cct,
+                                     struct req_info& info,
+                                     map<string, bufferlist>& attrs,
+                                     const bool allow_empty_attrs = true)
+{
+  map<string, string>::iterator iter;
+  for (iter = info.x_meta_map.begin(); iter != info.x_meta_map.end(); ++iter) {
+    const string &name(iter->first);
+    string &xattr(iter->second);
+
+    if (allow_empty_attrs || !xattr.empty()) {
+      ldout(cct, 10) << "x>> " << name << ":" << xattr << dendl;
+      format_xattr(xattr);
+      string attr_name(RGW_ATTR_PREFIX);
+      attr_name.append(name);
+      map<string, bufferlist>::value_type v(attr_name, bufferlist());
+      std::pair < map<string, bufferlist>::iterator, bool > rval(attrs.insert(v));
+      bufferlist& bl(rval.first->second);
+      bl.append(xattr.c_str(), xattr.size() + 1);
+    }
+  }
+}
+
+int RGWCopyObj::init_common()
+{
+  if (if_mod) {
+    if (parse_time(if_mod, &mod_time) < 0) {
+      ret = -EINVAL;
+      return ret;
+    }
+    mod_ptr = &mod_time;
+  }
+
+  if (if_unmod) {
+    if (parse_time(if_unmod, &unmod_time) < 0) {
+      ret = -EINVAL;
+      return ret;
+    }
+    unmod_ptr = &unmod_time;
+  }
+
+  bufferlist aclbl;
+  dest_policy.encode(aclbl);
+
+  attrs[RGW_ATTR_ACL] = aclbl;
+  rgw_get_request_metadata(s->cct, s->info, attrs);
+
+  map<string, string>::iterator iter;
+  for (iter = s->generic_attrs.begin(); iter != s->generic_attrs.end(); ++iter) {
+    bufferlist& attrbl = attrs[iter->first];
+    const string& val = iter->second;
+    attrbl.append(val.c_str(), val.size() + 1);
+  }
+
+  return 0;
+}
+int RGWCopyObj::verify_permission()
+{
+  ret = get_params();
+  if (ret < 0)
+    return ret; 
+  return 0;
+}
+void RGWCopyObj::pre_exec()
+{
+  rgw_bucket_object_pre_exec(s);
+}
+void RGWCopyObj::execute()
+{
+  uid_t old_uid = 0;
+  int id;
+  
+  string src_path = G.buckets_root + string("/") + src_bucket_name + string("/") + src_object.name;
+  string dst_path = G.buckets_root + string("/") + dest_bucket_name + string("/") + dest_object;
+
+  if (init_common() < 0)
+    return;
+  old_uid = drop_privs(s->user.auid);
+  
+  if (::rename(src_path.c_str(), dst_path.c_str()) < 0)
+  {
+    ret = -errno;
+  }
+  else
+  {
+    ret = 0;
+  }
+  id = restore_privs(old_uid);
+  
+#if 0
+  rgw_obj src_obj(src_bucket, src_object);
+  rgw_obj dst_obj(dest_bucket, dest_object);
+
+  RGWObjectCtx& obj_ctx = *static_cast<RGWObjectCtx *>(s->obj_ctx);
+  obj_ctx.set_atomic(src_obj);
+  obj_ctx.set_atomic(dst_obj);
+
+  encode_delete_at_attr(delete_at, attrs);
+
+  ret = store->copy_obj(obj_ctx,
+                        s->user.user_id,
+                        client_id,
+                        op_id,
+                        &s->info,
+                        source_zone,
+                        dst_obj,
+                        src_obj,
+                        dest_bucket_info,
+                        src_bucket_info,
+                        &src_mtime,
+                        &mtime,
+                        mod_ptr,
+                        unmod_ptr,
+                        if_match,
+                        if_nomatch,
+                        attrs_mod,
+                        attrs, RGW_OBJ_CATEGORY_MAIN,
+                        olh_epoch,
+			delete_at,
+                        (version_id.empty() ? NULL : &version_id),
+                        &s->req_id, /* use req_id as tag */
+                        &etag,
+                        &s->err,
+                        copy_obj_progress_cb, (void *)this
+                        );
+#endif
+}
+void RGWCopyObj::progress_cb(off_t ofs)
+{
+  if (1/*!s->cct->_conf->rgw_copy_obj_progress*/)
+    return;
+
+  if (1/*ofs - last_ofs < s->cct->_conf->rgw_copy_obj_progress_every_bytes*/)
+    return;
+
+  send_partial_response(ofs);
+
+  last_ofs = ofs;
 }

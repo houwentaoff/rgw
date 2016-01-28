@@ -160,6 +160,11 @@ public:
   RGWGetACLs_ObjStore() {}
   ~RGWGetACLs_ObjStore() {}
 };
+class RGWCopyObj_ObjStore : public RGWCopyObj {
+public:
+  RGWCopyObj_ObjStore() {}
+  ~RGWCopyObj_ObjStore() {}
+};
 static const int64_t NO_CONTENT_LENGTH = -1;
 
 extern void set_req_state_err(struct req_state *s, int err_no);
