@@ -32,6 +32,8 @@
 #include "porting_user.h"
 #include "porting_rest.h"
 #include "porting_rados.h"
+#include "porting_acl.h"
+#include "porting_acl_s3.h"
 #include "include/rados/librados.hh"
 #include "common/shell.h"
 #include "common/ceph_crypto.h"
@@ -228,6 +230,146 @@ int RGWHandler::init(RGWRados *_store, struct req_state *_s, RGWClientIO *cio)
 
   return 0;
 }
+static int decode_policy(CephContext *cct, bufferlist& bl, RGWAccessControlPolicy *policy)
+{
+  bufferlist::iterator iter = bl.begin();
+  try {
+    policy->decode(iter);
+  } catch (buffer::error& err) {
+    ldout(cct, 0) << "ERROR: could not decode policy, caught buffer::error" << dendl;
+    return -EIO;
+  }
+  if (1/*cct->_conf->subsys.should_gather(ceph_subsys_rgw, 15)*/) {
+    RGWAccessControlPolicy_S3 *s3policy = static_cast<RGWAccessControlPolicy_S3 *>(policy);
+    ldout(cct, 15) << "Read AccessControlPolicy";
+    s3policy->to_xml(*_dout);
+    *_dout << dendl;
+  }
+  return 0;
+}
+
+static int get_bucket_policy_from_attr(CephContext *cct, RGWRados *store, void *ctx,
+                                       RGWBucketInfo& bucket_info, map<string, bufferlist>& bucket_attrs,
+                                       RGWAccessControlPolicy *policy, rgw_obj& obj)
+{
+  map<string, bufferlist>::iterator aiter = bucket_attrs.find(RGW_ATTR_ACL);
+
+  if (aiter != bucket_attrs.end()) {
+    int ret = decode_policy(cct, aiter->second, policy);
+    if (ret < 0)
+      return ret;
+  } else {
+    ldout(cct, 0) << "WARNING: couldn't find acl header for bucket, generating default" << dendl;
+    RGWUserInfo uinfo;
+    /* object exists, but policy is broken */
+    int r = rgw_get_user_info_by_uid(store, bucket_info.owner, uinfo);
+    if (r < 0)
+      return r;
+
+    policy->create_default(bucket_info.owner, uinfo.display_name);
+  }
+  return 0;
+}
+
+static int get_obj_policy_from_attr(CephContext *cct, RGWRados *store, RGWObjectCtx& obj_ctx,
+                                    RGWBucketInfo& bucket_info, map<string, bufferlist>& bucket_attrs,
+                                    RGWAccessControlPolicy *policy, rgw_obj& obj)
+{
+  bufferlist bl;
+  int ret = 0;
+
+  RGWRados::Object op_target(store, bucket_info, obj_ctx, obj);
+  RGWRados::Object::Read rop(&op_target);
+
+  ret = rop.get_attr(RGW_ATTR_ACL, bl);
+  if (ret >= 0) {
+    ret = decode_policy(cct, bl, policy);
+    if (ret < 0)
+      return ret;
+  } else if (ret == -ENODATA) {
+    /* object exists, but policy is broken */
+    ldout(cct, 0) << "WARNING: couldn't find acl header for object, generating default" << dendl;
+    RGWUserInfo uinfo;
+    ret = rgw_get_user_info_by_uid(store, bucket_info.owner, uinfo);
+    if (ret < 0)
+      return ret;
+
+    policy->create_default(bucket_info.owner, uinfo.display_name);
+  }
+  return ret;
+}
+
+/**
+ * Get the AccessControlPolicy for an object off of disk.
+ * policy: must point to a valid RGWACL, and will be filled upon return.
+ * bucket: name of the bucket containing the object.
+ * object: name of the object to get the ACL for.
+ * Returns: 0 on success, -ERR# otherwise.
+ */
+static int get_policy_from_attr(CephContext *cct, RGWRados *store, void *ctx,
+                                RGWBucketInfo& bucket_info, map<string, bufferlist>& bucket_attrs,
+                                RGWAccessControlPolicy *policy, rgw_obj& obj)
+{
+  if (obj.bucket.name.empty()) {
+    return 0;
+  }
+
+  if (obj.get_object().empty()) {
+    rgw_obj instance_obj;
+    //store->get_bucket_instance_obj(bucket_info.bucket, instance_obj);
+    return get_bucket_policy_from_attr(cct, store, ctx, bucket_info, bucket_attrs,
+                                       policy, instance_obj);
+  }
+  return get_obj_policy_from_attr(cct, store, *static_cast<RGWObjectCtx *>(ctx), bucket_info, bucket_attrs,
+                                  policy, obj);
+}
+
+static int read_policy(RGWRados *store, struct req_state *s,
+                       RGWBucketInfo& bucket_info, map<string, bufferlist>& bucket_attrs,
+                       RGWAccessControlPolicy *policy, rgw_bucket& bucket, rgw_obj_key& object)
+{
+  string upload_id;
+  upload_id = s->info.args.get("uploadId");
+  rgw_obj obj;
+
+  if (!s->system_request && bucket_info.flags & BUCKET_SUSPENDED) {
+    ldout(s->cct, 0) << "NOTICE: bucket " << bucket_info.bucket.name << " is suspended" << dendl;
+    return -ERR_USER_SUSPENDED;
+  }
+
+  if (!object.empty() && !upload_id.empty()) {
+    /* multipart upload */
+    RGWMPObj mp(object.name, upload_id);
+    string oid = mp.get_meta();
+    obj.init_ns(bucket, oid, mp_ns);
+    obj.set_in_extra_data(true);
+  } else {
+    obj = rgw_obj(bucket, object);
+  }
+  int ret = get_policy_from_attr(s->cct, store, s->obj_ctx, bucket_info, bucket_attrs, policy, obj);
+  if (ret == -ENOENT && !object.empty()) {
+    /* object does not exist checking the bucket's ACL to make sure
+       that we send a proper error code */
+    RGWAccessControlPolicy bucket_policy(s->cct);
+    string no_object;
+    rgw_obj no_obj(bucket, no_object);
+    ret = get_policy_from_attr(s->cct, store, s->obj_ctx, bucket_info, bucket_attrs, &bucket_policy, no_obj);
+    if (ret < 0)
+      return ret;
+    string& owner = bucket_policy.get_owner().get_id();
+    if (!s->system_request && owner.compare(s->user.user_id) != 0 &&
+        !bucket_policy.verify_permission(s->user.user_id, s->perm_mask, RGW_PERM_READ))
+      ret = -EACCES;
+    else
+      ret = -ENOENT;
+
+  } else if (ret == -ENOENT) {
+      ret = -ERR_NO_SUCH_BUCKET;
+  }
+
+  return ret;
+}
+
 
 /**
  * Get the AccessControlPolicy for a bucket or object off of disk.
@@ -252,11 +394,11 @@ static int rgw_build_policies(RGWRados *store, struct req_state *s, bool only_bu
   }
 
   if(s->dialect.compare("s3") == 0) {
-//    s->bucket_acl = new RGWAccessControlPolicy_S3(s->cct);
+    s->bucket_acl = new RGWAccessControlPolicy_S3(s->cct);
   } else if(s->dialect.compare("swift")  == 0) {
     //s->bucket_acl = new RGWAccessControlPolicy_SWIFT(s->cct);
   } else {
-    //s->bucket_acl = new RGWAccessControlPolicy(s->cct);
+    s->bucket_acl = new RGWAccessControlPolicy(s->cct);
   }
 
   if (s->copy_source) { /* check if copy source is within the current domain */
@@ -296,13 +438,13 @@ static int rgw_build_policies(RGWRados *store, struct req_state *s, bool only_bu
 
     if (s->bucket_exists) {
       rgw_obj_key no_obj;
-//      ret = read_policy(store, s, s->bucket_info, s->bucket_attrs, s->bucket_acl, s->bucket, no_obj);
+      ret = read_policy(store, s, s->bucket_info, s->bucket_attrs, s->bucket_acl, s->bucket, no_obj);
     } else {
-//      s->bucket_acl->create_default(s->user.user_id, s->user.display_name);
+      s->bucket_acl->create_default(s->user.user_id, s->user.display_name);
       ret = -ERR_NO_SUCH_BUCKET;
     }
 
-//    s->bucket_owner = s->bucket_acl->get_owner();
+    s->bucket_owner = s->bucket_acl->get_owner();
 
     string& region = s->bucket_info.region;
 //    map<string, RGWRegion>::iterator dest_region = store->region_map.regions.find(region);
@@ -333,14 +475,14 @@ static int rgw_build_policies(RGWRados *store, struct req_state *s, bool only_bu
     if (!s->bucket_exists) {
       return -ERR_NO_SUCH_BUCKET;
     }
-//    s->object_acl = new RGWAccessControlPolicy(s->cct);
+    s->object_acl = new RGWAccessControlPolicy(s->cct);
 
     rgw_obj obj(s->bucket, s->object);
     store->set_atomic(s->obj_ctx, obj);
     if (prefetch_data) {
       store->set_prefetch_data(s->obj_ctx, obj);
     }
-//    ret = read_policy(store, s, s->bucket_info, s->bucket_attrs, s->object_acl, s->bucket, s->object);
+    ret = read_policy(store, s, s->bucket_info, s->bucket_attrs, s->object_acl, s->bucket, s->object);
   }
 
   return ret;
@@ -1635,11 +1777,13 @@ void RGWStatBucket::execute()
     }
   }
 }
+bool verify_object_permission(struct req_state *s, int perm);
+
 int RGWGetACLs::verify_permission()
 {
   bool perm;
   if (!s->object.empty()) {
-    perm = true;//perm = verify_object_permission(s, RGW_PERM_READ_ACP);
+    perm = verify_object_permission(s, RGW_PERM_READ_ACP);
   } else {
     perm = verify_bucket_permission(s, RGW_PERM_READ_ACP);
   }
@@ -1654,19 +1798,8 @@ void RGWGetACLs::pre_exec()
 }
 void RGWGetACLs::execute()
 {
-  acls = "<AccessControlPolicy xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">";
-  acls += "<Owner> <ID>bwcpn</ID></Owner>";
-  acls += "<AccessControlList>"
-            "<Grant>"
-                "<Grantee xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"Canonical User\">"
-                    "<ID>bwcpn</ID><DisplayName>bwcpn houu</DisplayName>"
-                "</Grantee>"
-                "<Permission>FULL_CONTROL</Permission>"
-            "</Grant>"
-          "</AccessControlList>";
-  acls += "</AccessControlPolicy>";
-
   stringstream ss;
+#if 0
   ss<<"<AccessControlPolicy xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">"
      "<Owner> <ID>"<<"bwcpn"<<"</ID></Owner>";
   ss<<"<AccessControlList>"
@@ -1678,9 +1811,11 @@ void RGWGetACLs::execute()
             "</Grant>"
           "</AccessControlList>";
   ss<<"</AccessControlPolicy>";                  
-  //RGWAccessControlPolicy *acl = (!s->object.empty() ? s->object_acl : s->bucket_acl);
-  //RGWAccessControlPolicy_S3 *s3policy = static_cast<RGWAccessControlPolicy_S3 *>(acl);
-  //s3policy->to_xml(ss);
+#else
+  RGWAccessControlPolicy *acl = (!s->object.empty() ? s->object_acl : s->bucket_acl);
+  RGWAccessControlPolicy_S3 *s3policy = static_cast<RGWAccessControlPolicy_S3 *>(acl);
+  s3policy->to_xml(ss);
+#endif
   acls = ss.str();
 }
 bool RGWCopyObj::parse_copy_location(const string& url_src, string& bucket_name, rgw_obj_key& key)

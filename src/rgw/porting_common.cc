@@ -447,6 +447,71 @@ bool rgw_err::is_err() const
 {
   return !(http_ret >= 200 && http_ret <= 399);
 }
+bool verify_requester_payer_permission(struct req_state *s)
+{
+  if (!s->bucket_info.requester_pays)
+    return true;
+
+  if (s->bucket_info.owner == s->user.user_id)
+    return true;
+
+  const char *request_payer = s->info.env->get("HTTP_X_AMZ_REQUEST_PAYER");
+  if (!request_payer) {
+    bool exists;
+    request_payer = s->info.args.get("x-amz-request-payer", &exists).c_str();
+    if (!exists) {
+      return false;
+    }
+  }
+
+  if (strcasecmp(request_payer, "requester") == 0) {
+    return true;
+  }
+
+  return false;
+}
+static inline bool check_deferred_bucket_acl(struct req_state *s, uint8_t deferred_check, int perm)
+{
+  return (s->defer_to_bucket_acls == deferred_check && verify_bucket_permission(s, perm));
+}
+
+
+bool verify_object_permission(struct req_state *s, RGWAccessControlPolicy *bucket_acl, RGWAccessControlPolicy *object_acl, int perm)
+{
+  if (!verify_requester_payer_permission(s))
+    return false;
+
+  if (check_deferred_bucket_acl(s, RGW_DEFER_TO_BUCKET_ACLS_RECURSE, perm) ||
+      check_deferred_bucket_acl(s, RGW_DEFER_TO_BUCKET_ACLS_FULL_CONTROL, RGW_PERM_FULL_CONTROL)) {
+    return true;
+  }
+
+  if (!object_acl)
+    return false;
+
+  bool ret = object_acl->verify_permission(s->user.user_id, s->perm_mask, perm);
+  if (ret)
+    return true;
+
+  if (1/*!s->cct->_conf->rgw_enforce_swift_acls*/)
+    return ret;
+
+  if ((perm & (int)s->perm_mask) != perm)
+    return false;
+
+  int swift_perm = 0;
+  if (perm & (RGW_PERM_READ | RGW_PERM_READ_ACP))
+    swift_perm |= RGW_PERM_READ_OBJS;
+  if (perm & RGW_PERM_WRITE)
+    swift_perm |= RGW_PERM_WRITE_OBJS;
+
+  if (!swift_perm)
+    return false;
+  /* we already verified the user mask above, so we pass swift_perm as the mask here,
+     otherwise the mask might not cover the swift permissions bits */
+  return bucket_acl->verify_permission(s->user.user_id, swift_perm, swift_perm);
+}
+
 bool verify_bucket_permission(struct req_state *s, int perm)
 {
 #if 0
@@ -463,7 +528,10 @@ bool verify_bucket_permission(struct req_state *s, int perm)
 #endif
   return true;
 }
-
+bool verify_object_permission(struct req_state *s, int perm)
+{
+  return verify_object_permission(s, s->bucket_acl, s->object_acl, perm);
+}
 static bool char_needs_url_encoding(char c)
 {
   if (c <= 0x20 || c >= 0x7f)
@@ -772,6 +840,54 @@ static struct rgw_name_to_flag op_type_mapping[] = { {"*",  RGW_OP_TYPE_ALL},
 int rgw_parse_op_type_list(const string& str, uint32_t *perm)
 {
   return parse_list_of_flags(op_type_mapping, str, perm);
+}
+string rgw_trim_whitespace(const string& src)
+{
+  if (src.empty()) {
+    return string();
+  }
+
+  int start = 0;
+  for (; start != (int)src.size(); start++) {
+    if (!isspace(src[start]))
+      break;
+  }
+
+  int end = src.size() - 1;
+  if (end < start) {
+    return string();
+  }
+
+  for (; end > start; end--) {
+    if (!isspace(src[end]))
+      break;
+  }
+
+  return src.substr(start, end - start + 1);
+}
+
+string rgw_trim_quotes(const string& val)
+{
+  string s = rgw_trim_whitespace(val);
+  if (s.size() < 2)
+    return s;
+
+  int start = 0;
+  int end = s.size() - 1;
+  int quotes_count = 0;
+
+  if (s[start] == '"') {
+    start++;
+    quotes_count++;
+  }
+  if (s[end] == '"') {
+    end--;
+    quotes_count++;
+  }
+  if (quotes_count == 2) {
+    return s.substr(start, end - start + 1);
+  }
+  return s;
 }
 
 

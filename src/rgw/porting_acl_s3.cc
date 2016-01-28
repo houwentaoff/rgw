@@ -302,7 +302,7 @@ static int parse_grantee_str(RGWRados *store, string& grantee_str,
   if (ret < 0)
     return ret;
 
-  string id_val = "";//rgw_trim_quotes(id_val_quoted);
+  string id_val = rgw_trim_quotes(id_val_quoted);
 
   if (strcasecmp(id_type.c_str(), "emailAddress") == 0) {
 //    ret = rgw_get_user_info_by_email(store, id_val, info);
@@ -311,17 +311,17 @@ static int parse_grantee_str(RGWRados *store, string& grantee_str,
 
     grant.set_canon(info.user_id, info.display_name, rgw_perm);
   } else if (strcasecmp(id_type.c_str(), "id") == 0) {
-//    ret = rgw_get_user_info_by_uid(store, id_val, info);
+    ret = rgw_get_user_info_by_uid(store, id_val, info);
     if (ret < 0)
       return ret;
 
     grant.set_canon(info.user_id, info.display_name, rgw_perm);
   } else if (strcasecmp(id_type.c_str(), "uri") == 0) {
-//    ACLGroupTypeEnum gid = grant.uri_to_group(id_val);
-//    if (gid == ACL_GROUP_NONE)
-//      return -EINVAL;
+    ACLGroupTypeEnum gid = grant.uri_to_group(id_val);
+    if (gid == ACL_GROUP_NONE)
+      return -EINVAL;
 
-//    grant.set_group(gid, rgw_perm);
+    grant.set_group(gid, rgw_perm);
   } else {
     return -EINVAL;
   }
@@ -482,10 +482,10 @@ int RGWAccessControlPolicy_S3::rebuild(RGWRados *store, ACLOwner *owner, RGWAcce
   }
 
   RGWUserInfo owner_info;
-//  if (rgw_get_user_info_by_uid(store, owner->get_id(), owner_info) < 0) {
-//    ldout(cct, 10) << "owner info does not exist" << dendl;
-//    return -EINVAL;
-//  }
+  if (rgw_get_user_info_by_uid(store, owner->get_id(), owner_info) < 0) {
+    ldout(cct, 10) << "owner info does not exist" << dendl;
+    return -EINVAL;
+  }
   ACLOwner& dest_owner = dest.get_owner();
   dest_owner.set_id(owner->get_id());
   dest_owner.set_name(owner_info.display_name);
@@ -528,10 +528,10 @@ int RGWAccessControlPolicy_S3::rebuild(RGWRados *store, ACLOwner *owner, RGWAcce
           }
         }
     
-//        if (grant_user.user_id.empty() && rgw_get_user_info_by_uid(store, uid, grant_user) < 0) {
-//          ldout(cct, 10) << "grant user does not exist:" << uid << dendl;
-//          return -EINVAL;
-//        } else 
+        if (grant_user.user_id.empty() && rgw_get_user_info_by_uid(store, uid, grant_user) < 0) {
+          ldout(cct, 10) << "grant user does not exist:" << uid << dendl;
+          return -EINVAL;
+        } else 
         {
           ACLPermission& perm = src_grant.get_permission();
           new_grant.set_canon(uid, grant_user.display_name, perm.get_permissions());
