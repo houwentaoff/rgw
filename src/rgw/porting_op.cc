@@ -1361,6 +1361,7 @@ void RGWPutObj::execute()
       goto done;//_err;
   }
   chmod(full_path.c_str(), 07777);
+  
   do {
     bufferlist data;
     len = get_data(data);
@@ -1760,24 +1761,138 @@ done:
     //if (ret == -EEXIST)
     //    ret = 0;    
 }
-<<<<<<< HEAD
 int RGWCompleteMultipart::verify_permission()
 {
   if (!verify_bucket_permission(s, RGW_PERM_WRITE))
-=======
-int RGWStatBucket::verify_permission()
-{
-  if (!verify_bucket_permission(s, RGW_PERM_READ))
->>>>>>> 47099b1a74cbef530bfa1764771a5fb2b6496f6e
     return -EACCES;
 
   return 0;
 }
-<<<<<<< HEAD
+int RGWStatBucket::verify_permission()
+{
+  if (!verify_bucket_permission(s, RGW_PERM_READ))
+    return -EACCES;
+
+  return 0;
+}
+
+static bool is_v2_upload_id(const string& upload_id)
+{
+  const char *uid = upload_id.c_str();
+
+  return (strncmp(uid, MULTIPART_UPLOAD_ID_PREFIX, sizeof(MULTIPART_UPLOAD_ID_PREFIX) - 1) == 0) ||
+         (strncmp(uid, MULTIPART_UPLOAD_ID_PREFIX_LEGACY, sizeof(MULTIPART_UPLOAD_ID_PREFIX_LEGACY) - 1) == 0);
+}
+
+static int list_multipart_parts(RGWRados *store, struct req_state *s,
+                                const string& upload_id,
+                                string& meta_oid, int num_parts,
+                                int marker, map<uint32_t, RGWUploadPartInfo>& parts,
+                                int *next_marker, bool *truncated,
+                                bool assume_unsorted = false)
+{
+  map<string, bufferlist> parts_map;
+  map<string, bufferlist>::iterator iter;
+  bufferlist header;
+
+  rgw_obj obj;
+  obj.init_ns(s->bucket, meta_oid, mp_ns);
+  obj.set_in_extra_data(true);
+
+  bool sorted_omap = is_v2_upload_id(upload_id) && !assume_unsorted;
+
+  int ret;
+
+  parts.clear();
+
+  if (sorted_omap) {
+    string p;
+    p = "part.";
+    char buf[32];
+
+    snprintf(buf, sizeof(buf), "%08d", marker);
+    p.append(buf);
+
+    ret = 0;// store->omap_get_vals(obj, header, p, num_parts + 1, parts_map);
+  } else {
+    ret = 0;//store->omap_get_all(obj, header, parts_map);
+  }
+  if (ret < 0)
+    return ret;
+
+  int i;
+  int last_num = 0;
+
+  uint32_t expected_next = marker + 1;
+
+  for (i = 0, iter = parts_map.begin(); (i < num_parts || !sorted_omap) && iter != parts_map.end(); ++iter, ++i) {
+    bufferlist& bl = iter->second;
+    bufferlist::iterator bli = bl.begin();
+    RGWUploadPartInfo info;
+    try {
+      ::decode(info, bli);
+    } catch (buffer::error& err) {
+      ldout(s->cct, 0) << "ERROR: could not part info, caught buffer::error" << dendl;
+      return -EIO;
+    }
+    if (sorted_omap) {
+      if (info.num != expected_next) {
+        /* ouch, we expected a specific part num here, but we got a different one. Either
+         * a part is missing, or it could be a case of mixed rgw versions working on the same
+         * upload, where one gateway doesn't support correctly sorted omap keys for multipart
+         * upload just assume data is unsorted.
+         */
+        return list_multipart_parts(store, s, upload_id, meta_oid, num_parts, marker, parts, next_marker, truncated, true);
+      }
+      expected_next++;
+    }
+    if (sorted_omap ||
+      (int)info.num > marker) {
+      parts[info.num] = info;
+      last_num = info.num;
+    }
+  }
+
+  if (sorted_omap) {
+    if (truncated)
+      *truncated = (iter != parts_map.end());
+  } else {
+    /* rebuild a map with only num_parts entries */
+
+    map<uint32_t, RGWUploadPartInfo> new_parts;
+    map<uint32_t, RGWUploadPartInfo>::iterator piter;
+
+    for (i = 0, piter = parts.begin(); i < num_parts && piter != parts.end(); ++i, ++piter) {
+      new_parts[piter->first] = piter->second;
+      last_num = piter->first;
+    }
+
+    if (truncated)
+      *truncated = (piter != parts.end());
+
+    parts.swap(new_parts);
+  }
+
+  if (next_marker) {
+    *next_marker = last_num;
+  }
+
+  return 0;
+}
 
 void RGWCompleteMultipart::pre_exec()
 {
   rgw_bucket_object_pre_exec(s);
+}
+static int get_obj_attrs(RGWRados *store, struct req_state *s, rgw_obj& obj, map<string, bufferlist>& attrs)
+{
+  //RGWRados::Object op_target(store, s->bucket_info, *static_cast<RGWObjectCtx *>(s->obj_ctx), obj);
+  //RGWRados::Object::Read read_op(&op_target);
+
+  //read_op.params.attrs = &attrs;
+  //read_op.params.perr = &s->err;
+
+  return 0;//read_op.prepare(NULL, NULL);
 }
 void RGWCompleteMultipart::execute()
 {
@@ -1785,8 +1900,8 @@ void RGWCompleteMultipart::execute()
   map<int, string>::iterator iter;
   RGWMultiXMLParser parser;
   string meta_oid;
-//  map<uint32_t, RGWUploadPartInfo> obj_parts;
-//  map<uint32_t, RGWUploadPartInfo>::iterator obj_iter;
+  map<uint32_t, RGWUploadPartInfo> obj_parts;
+  map<uint32_t, RGWUploadPartInfo>::iterator obj_iter;
   map<string, bufferlist> attrs;
   off_t ofs = 0;
   MD5 hash;
@@ -1830,11 +1945,11 @@ void RGWCompleteMultipart::execute()
     return;
   }
 
-//  if ((int)parts->parts.size() > s->cct->_conf->rgw_multipart_part_upload_limit) {
-//    ret = -ERANGE;
-//    return;
-//  }
-#if 0
+  if ((int)parts->parts.size() > G.rgw_multipart_part_upload_limit) {
+    ret = -ERANGE;
+    return;
+  }
+#if 1
   mp.init(s->object.name, upload_id);
   meta_oid = mp.get_meta();
 
@@ -1844,7 +1959,7 @@ void RGWCompleteMultipart::execute()
   int marker = 0;
   bool truncated;
 
-  uint64_t min_part_size = s->cct->_conf->rgw_multipart_min_part_size;
+  uint64_t min_part_size = G.rgw_multipart_min_part_size;
 
   list<rgw_obj_key> remove_objs; /* objects to be removed from index listing */
 
@@ -1852,16 +1967,22 @@ void RGWCompleteMultipart::execute()
 
   iter = parts->parts.begin();
 
-  meta_obj.init_ns(s->bucket, meta_oid, mp_ns);
-  meta_obj.set_in_extra_data(true);
-  meta_obj.index_hash_source = s->object.name;
+  for (; iter!= parts->parts.end(); iter++)
+  {
+      char petag[CEPH_CRYPTO_MD5_DIGESTSIZE];
+      hex_to_buf(iter->second.c_str(), petag, CEPH_CRYPTO_MD5_DIGESTSIZE);
+      hash.Update((const byte *)petag, sizeof(petag));      
+  }
+  //meta_obj.init_ns(s->bucket, meta_oid, mp_ns);
+  //meta_obj.set_in_extra_data(true);
+  //meta_obj.index_hash_source = s->object.name;
 
   ret = get_obj_attrs(store, s, meta_obj, attrs);
   if (ret < 0) {
     ldout(s->cct, 0) << "ERROR: failed to get obj attrs, obj=" << meta_obj << " ret=" << ret << dendl;
     return;
   }
-
+#if 0
   do {
     ret = list_multipart_parts(store, s, upload_id, meta_oid, max_parts, marker, obj_parts, &marker, &truncated);
     if (ret == -ENOENT) {
@@ -1907,13 +2028,13 @@ void RGWCompleteMultipart::execute()
       rgw_obj src_obj;
       src_obj.init_ns(s->bucket, oid, mp_ns);
 
-      if (obj_part.manifest.empty()) {
-        ldout(s->cct, 0) << "ERROR: empty manifest for object part: obj=" << src_obj << dendl;
-        ret = -ERR_INVALID_PART;
-        return;
-      } else {
-        manifest.append(obj_part.manifest);
-      }
+      //if (obj_part.manifest.empty()) {
+      //  ldout(s->cct, 0) << "ERROR: empty manifest for object part: obj=" << src_obj << dendl;
+      //  ret = -ERR_INVALID_PART;
+      //  return;
+      //} else {
+      //  manifest.append(obj_part.manifest);
+      //}
 
       rgw_obj_key remove_key;
       src_obj.get_index_key(&remove_key);
@@ -1923,6 +2044,7 @@ void RGWCompleteMultipart::execute()
       ofs += obj_part.size;
     }
   } while (truncated);
+#endif  
   hash.Final((byte *)final_etag);
 
   buf_to_hex((unsigned char *)final_etag, sizeof(final_etag), final_etag_str);
@@ -1937,7 +2059,7 @@ void RGWCompleteMultipart::execute()
 
   target_obj.init(s->bucket, s->object.name);
   if (versioned_object) {
-    store->gen_rand_obj_instance_name(&target_obj);
+    ;//store->gen_rand_obj_instance_name(&target_obj);
   }
 
   RGWObjectCtx& obj_ctx = *static_cast<RGWObjectCtx *>(s->obj_ctx);
@@ -1945,6 +2067,7 @@ void RGWCompleteMultipart::execute()
   obj_ctx.set_atomic(target_obj);
 
   RGWRados::Object op_target(store, s->bucket_info, *static_cast<RGWObjectCtx *>(s->obj_ctx), target_obj);
+#if 0
   RGWRados::Object::Write obj_op(&op_target);
 
   obj_op.meta.manifest = &manifest;
@@ -1957,17 +2080,15 @@ void RGWCompleteMultipart::execute()
   ret = obj_op.write_meta(ofs, attrs);
   if (ret < 0)
     return;
-
+#endif
   // remove the upload obj
-  int r = store->delete_obj(*static_cast<RGWObjectCtx *>(s->obj_ctx), s->bucket_info, meta_obj, 0);
+  int r = 0;//store->delete_obj(*static_cast<RGWObjectCtx *>(s->obj_ctx), s->bucket_info, meta_obj, 0);
   if (r < 0) {
     ldout(store->ctx(), 0) << "WARNING: failed to remove object " << meta_obj << dendl;
   }
 #endif
 }
 
-
-=======
 void RGWStatBucket::pre_exec()
 {
   rgw_bucket_object_pre_exec(s);
@@ -2243,4 +2364,3 @@ void RGWCopyObj::progress_cb(off_t ofs)
 
   last_ofs = ofs;
 }
->>>>>>> 47099b1a74cbef530bfa1764771a5fb2b6496f6e

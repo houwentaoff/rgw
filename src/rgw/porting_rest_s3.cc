@@ -1047,8 +1047,6 @@ void RGWDeleteObj_ObjStore_S3::send_response()
   }
   end_header(s, this);
 }
-<<<<<<< HEAD
-=======
 static void dump_bucket_metadata(struct req_state *s, RGWBucketEnt& bucket)
 {
   char buf[32];
@@ -1183,4 +1181,3 @@ void RGWCopyObj_ObjStore_S3::send_response()
   }
 }
 
->>>>>>> 47099b1a74cbef530bfa1764771a5fb2b6496f6e

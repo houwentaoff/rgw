@@ -38,11 +38,8 @@ all:$(RGW_SERVER)
 
 RGW_OBJS  	  =  rgw_env.o rgw_fcgi.o rgw_client_io.o rgw_common.o \
 			     rgw_op.o rgw_rest.o  rgw_rest_s3.o rgw_main.o 
-<<<<<<< HEAD
-TEST_OBJS 	  = rgw_multi.o \
-=======
-TEST_OBJS 	  = porting_dencode.o \
->>>>>>> 47099b1a74cbef530bfa1764771a5fb2b6496f6e
+
+TEST_OBJS 	  = porting_dencode.o rgw_multi.o\
 				porting_quota.o rgw_cache.o porting_metadata.o porting_user.o\
 				rgw_auth_s3.o porting_tools.o porting_rados.o porting_json_enc.o \
 				porting_bucket.o porting_acl_s3.o porting_xml.o porting_acl.o \

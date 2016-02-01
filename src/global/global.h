@@ -103,6 +103,9 @@ struct globals {
     int rgw_bucket_default_quota_max_size;
     int rgw_user_default_quota_max_objects;
     int rgw_user_default_quota_max_size;
+    uint64_t rgw_multipart_min_part_size;
+    /* default is 10000 parts */
+    int rgw_multipart_part_upload_limit;
 };
 
 #endif

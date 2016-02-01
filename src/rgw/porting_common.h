@@ -1460,6 +1460,40 @@ static inline uint64_t rgw_rounded_objsize_kb(uint64_t bytes)
 {
   return ((bytes + 4095) & ~4095) / 1024;
 }
+static inline int hexdigit(char c)
+{
+  if (c >= '0' && c <= '9')
+    return (c - '0');
+  c = toupper(c);
+  if (c >= 'A' && c <= 'F')
+    return c - 'A' + 0xa;
+  return -EINVAL;
+}
+
+static inline int hex_to_buf(const char *hex, char *buf, int len)
+{
+  int i = 0;
+  const char *p = hex;
+  while (*p) {
+    if (i >= len)
+      return -EINVAL;
+    buf[i] = 0;
+    int d = hexdigit(*p);
+    if (d < 0)
+      return d;
+    buf[i] = d << 4;
+    p++;
+    if (!*p)
+      return -EINVAL;
+    d = hexdigit(*p);
+    if (d < 0)
+      return -d;
+    buf[i] += d;
+    i++;
+    p++;
+  }
+  return i;
+}
 
 /** Convert an input URL into a sane object name
  * by converting %-escaped strings into characters, etc*/

@@ -694,6 +694,8 @@ int main ( int argc, char *argv[] )
     G.rgw_num_rados_handles         = 1;
     G.rgw_cache_enabled             = false;
     G.sys_user_bucket_root          = "/.sys_user";
+    G.rgw_multipart_min_part_size   = _M(5);
+    G.rgw_multipart_part_upload_limit = 10000;
     parse_conf(_PATH_CONF, &G, "=",(FUNC)(&G.set_global_params));
         
     ldout(0, 0)<<"hello world\n"<<dendl;

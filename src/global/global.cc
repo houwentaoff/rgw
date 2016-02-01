@@ -50,6 +50,8 @@ void globals::init()
     rgw_user_default_quota_max_objects   = -1;
     rgw_user_default_quota_max_size      = -1;
     sys_user_bucket_root  = "";
+    rgw_multipart_min_part_size = 0;
+    rgw_multipart_part_upload_limit = 0;
     
     
 }
@@ -132,6 +134,12 @@ void globals::set_global_params(void *obj, const char *name, const char *val)
     {
         pobj->sys_user_bucket_root = val;
     }
-
-}
+    if (string(name) =="rgw_multipart_min_part_size")
+    {
+        pobj->rgw_multipart_min_part_size = atoi(val);
+    }
+    if (string(name) =="rgw_multipart_part_upload_limit")
+    {
+        pobj->rgw_multipart_part_upload_limit = atoi(val);
+    }}
 

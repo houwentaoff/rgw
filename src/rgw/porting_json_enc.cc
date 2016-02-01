@@ -18,6 +18,7 @@
  */
 
 #include "porting_common.h"
+#include "porting_rados.h"
 #include "common/ceph_json.h"
 
 static void decode_access_keys(map<string, RGWAccessKey>& m, JSONObj *o)
@@ -213,4 +214,19 @@ void RGWUserInfo::decode_json(JSONObj *obj)
   JSONDecoder::decode_json("temp_url_keys", temp_url_keys, obj);
 }
 
-
+void RGWUploadPartInfo::dump(Formatter *f) const
+{
+  encode_json("num", num, f);
+  encode_json("size", size, f);
+  encode_json("etag", etag, f);
+  encode_json("modified", modified, f);
+}
+void RGWUploadPartInfo::generate_test_instances(list<RGWUploadPartInfo*>& o)
+{
+  RGWUploadPartInfo *i = new RGWUploadPartInfo;
+  i->num = 1;
+  i->size = 10 * 1024 * 1024;
+  i->etag = "etag";
+  o.push_back(i);
+  o.push_back(new RGWUploadPartInfo);
+}

@@ -586,6 +586,38 @@ public:
     stats = _stats;
   }
 };
+struct RGWUploadPartInfo {
+  uint32_t num;
+  uint64_t size;
+  string etag;
+  utime_t modified;
+  //RGWObjManifest manifest;
+
+  RGWUploadPartInfo() : num(0), size(0) {}
+
+  void encode(bufferlist& bl) const {
+    ENCODE_START(3, 2, bl);
+    ::encode(num, bl);
+    ::encode(size, bl);
+    ::encode(etag, bl);
+    ::encode(modified, bl);
+    //::encode(manifest, bl);
+    ENCODE_FINISH(bl);
+  }
+  void decode(bufferlist::iterator& bl) {
+    DECODE_START_LEGACY_COMPAT_LEN(3, 2, 2, bl);
+    ::decode(num, bl);
+    ::decode(size, bl);
+    ::decode(etag, bl);
+    ::decode(modified, bl);
+   // if (struct_v >= 3)
+      //::decode(manifest, bl);
+    DECODE_FINISH(bl);
+  }
+  void dump(Formatter *f) const;
+  static void generate_test_instances(list<RGWUploadPartInfo*>& o);
+};
+WRITE_CLASS_ENCODER(RGWUploadPartInfo)
 
 template <class T>
 class RGWChainedCacheImpl : public RGWChainedCache {
