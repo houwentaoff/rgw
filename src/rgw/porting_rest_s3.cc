@@ -488,7 +488,7 @@ RGWOp *RGWHandler_ObjStore_Obj_S3::op_delete()
 RGWOp *RGWHandler_ObjStore_Obj_S3::op_post()
 {
   if (s->info.args.exists("uploadId"))
-    return NULL;//new RGWCompleteMultipart_ObjStore_S3;
+    return new RGWCompleteMultipart_ObjStore_S3;
 
   if (s->info.args.exists("uploads"))
     return new RGWInitMultipart_ObjStore_S3;
@@ -1009,6 +1009,26 @@ void RGWInitMultipart_ObjStore_S3::send_response()
     rgw_flush_formatter_and_reset(s, s->formatter);
   }
 }
+void RGWCompleteMultipart_ObjStore_S3::send_response()
+{
+  if (ret)
+    set_req_state_err(s, ret);
+  dump_errno(s);
+  end_header(s, this, "application/xml");
+  if (ret == 0) { 
+    dump_start(s);
+    s->formatter->open_object_section_in_ns("CompleteMultipartUploadResult",
+			  "http://s3.amazonaws.com/doc/2006-03-01/");
+    if (s->info.domain.length())
+      s->formatter->dump_format("Location", "%s.%s", s->bucket_name_str.c_str(), s->info.domain.c_str());
+    s->formatter->dump_string("Bucket", s->bucket_name_str);
+    s->formatter->dump_string("Key", s->object.name);
+    s->formatter->dump_string("ETag", etag);
+    s->formatter->close_section();
+    rgw_flush_formatter_and_reset(s, s->formatter);
+  }
+}
+
 void RGWDeleteObj_ObjStore_S3::send_response()
 {
   int r = ret;

@@ -193,6 +193,14 @@ public:
   int get_params();
   void send_response();
 };
+class RGWCompleteMultipart_ObjStore_S3 : public RGWCompleteMultipart_ObjStore {
+public:
+  RGWCompleteMultipart_ObjStore_S3() {}
+  ~RGWCompleteMultipart_ObjStore_S3() {}
+
+  void send_response();
+};
+
 class RGWDeleteObj_ObjStore_S3 : public RGWDeleteObj_ObjStore {
 public:
   RGWDeleteObj_ObjStore_S3() {}

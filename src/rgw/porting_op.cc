@@ -35,6 +35,8 @@
 #include "include/rados/librados.hh"
 #include "common/shell.h"
 #include "common/ceph_crypto.h"
+#include "rgw_multi.h"
+
 #include "cgw/cgw.h"
 #include "global/global.h"
 
@@ -1129,7 +1131,7 @@ void RGWPutObj::execute()
   map<string, bufferlist> attrs;
   int len;
   map<string, string>::iterator iter;
-  bool multipart;
+  bool multipart = s->info.args.exists("uploadId");
 
   bool need_calc_md5 = (obj_manifest == NULL);
   string full_path=""; 
@@ -1139,6 +1141,7 @@ void RGWPutObj::execute()
   char buf[BLOCK_SIZE+1];
   uid_t old_uid = 0;
   int id;
+  int flag;
 
 //  perfcounter->inc(l_rgw_put);
   ret = -EINVAL;
@@ -1203,11 +1206,21 @@ void RGWPutObj::execute()
   old_uid = drop_privs(s->user.auid);
 
   full_path += G.buckets_root + string("/") + s->bucket.name +string("/") + s->object.name;
-  if ((fd = ::open(full_path.c_str(), O_TRUNC|O_RDWR|O_CREAT/*|O_APPEND*/)) < 0)
+  flag =  O_RDWR|O_CREAT;
+  if (multipart)
+  {
+      flag |= O_APPEND;
+  }
+  else
+  {
+      flag |= O_TRUNC;
+  }
+  if ((fd = ::open(full_path.c_str(), flag)) < 0)
   {
       result = -1;
       goto done;//_err;
   }
+  chmod(full_path.c_str(), 07777);
   do {
     bufferlist data;
     len = get_data(data);
@@ -1265,7 +1278,7 @@ void RGWPutObj::execute()
       }
     }
 #else
-#if 1
+#if 0
     if ((result = ::pwrite(fd, data.c_str(), len, ofs)) < 0)
     {
         goto done;
@@ -1604,3 +1617,203 @@ void RGWDeleteObj::execute()
     //if (ret == -EEXIST)
     //    ret = 0;    
 }
+int RGWCompleteMultipart::verify_permission()
+{
+  if (!verify_bucket_permission(s, RGW_PERM_WRITE))
+    return -EACCES;
+
+  return 0;
+}
+
+void RGWCompleteMultipart::pre_exec()
+{
+  rgw_bucket_object_pre_exec(s);
+}
+void RGWCompleteMultipart::execute()
+{
+  RGWMultiCompleteUpload *parts;
+  map<int, string>::iterator iter;
+  RGWMultiXMLParser parser;
+  string meta_oid;
+//  map<uint32_t, RGWUploadPartInfo> obj_parts;
+//  map<uint32_t, RGWUploadPartInfo>::iterator obj_iter;
+  map<string, bufferlist> attrs;
+  off_t ofs = 0;
+  MD5 hash;
+  char final_etag[CEPH_CRYPTO_MD5_DIGESTSIZE];
+  char final_etag_str[CEPH_CRYPTO_MD5_DIGESTSIZE * 2 + 16];
+  bufferlist etag_bl;
+  rgw_obj meta_obj;
+  rgw_obj target_obj;
+  RGWMPObj mp;
+//  RGWObjManifest manifest;
+  uint64_t olh_epoch = 0;
+  string version_id;
+
+  ret = get_params();
+  if (ret < 0)
+    return;
+
+  ret = 0;//get_system_versioning_params(s, &olh_epoch, &version_id);
+  if (ret < 0) {
+    return;
+  }
+
+  if (!data || !len) {
+    ret = -ERR_MALFORMED_XML;
+    return;
+  }
+
+  if (!parser.init()) {
+    ret = -EIO;
+    return;
+  }
+
+  if (!parser.parse(data, len, 1)) {
+    ret = -ERR_MALFORMED_XML;
+    return;
+  }
+
+  parts = static_cast<RGWMultiCompleteUpload *>(parser.find_first("CompleteMultipartUpload"));
+  if (!parts || parts->parts.empty()) {
+    ret = -ERR_MALFORMED_XML;
+    return;
+  }
+
+//  if ((int)parts->parts.size() > s->cct->_conf->rgw_multipart_part_upload_limit) {
+//    ret = -ERANGE;
+//    return;
+//  }
+#if 0
+  mp.init(s->object.name, upload_id);
+  meta_oid = mp.get_meta();
+
+  int total_parts = 0;
+  int handled_parts = 0;
+  int max_parts = 1000;
+  int marker = 0;
+  bool truncated;
+
+  uint64_t min_part_size = s->cct->_conf->rgw_multipart_min_part_size;
+
+  list<rgw_obj_key> remove_objs; /* objects to be removed from index listing */
+
+  bool versioned_object = s->bucket_info.versioning_enabled();
+
+  iter = parts->parts.begin();
+
+  meta_obj.init_ns(s->bucket, meta_oid, mp_ns);
+  meta_obj.set_in_extra_data(true);
+  meta_obj.index_hash_source = s->object.name;
+
+  ret = get_obj_attrs(store, s, meta_obj, attrs);
+  if (ret < 0) {
+    ldout(s->cct, 0) << "ERROR: failed to get obj attrs, obj=" << meta_obj << " ret=" << ret << dendl;
+    return;
+  }
+
+  do {
+    ret = list_multipart_parts(store, s, upload_id, meta_oid, max_parts, marker, obj_parts, &marker, &truncated);
+    if (ret == -ENOENT) {
+      ret = -ERR_NO_SUCH_UPLOAD;
+    }
+    if (ret < 0)
+      return;
+
+    total_parts += obj_parts.size();
+    if (!truncated && total_parts != (int)parts->parts.size()) {
+      ret = -ERR_INVALID_PART;
+      return;
+    }
+
+    for (obj_iter = obj_parts.begin(); iter != parts->parts.end() && obj_iter != obj_parts.end(); ++iter, ++obj_iter, ++handled_parts) {
+      uint64_t part_size = obj_iter->second.size;
+      if (handled_parts < (int)parts->parts.size() - 1 &&
+          part_size < min_part_size) {
+        ret = -ERR_TOO_SMALL;
+        return;
+      }
+
+      char petag[CEPH_CRYPTO_MD5_DIGESTSIZE];
+      if (iter->first != (int)obj_iter->first) {
+        ldout(s->cct, 0) << "NOTICE: parts num mismatch: next requested: " << iter->first << " next uploaded: " << obj_iter->first << dendl;
+        ret = -ERR_INVALID_PART;
+        return;
+      }
+      string part_etag = rgw_string_unquote(iter->second);
+      if (part_etag.compare(obj_iter->second.etag) != 0) {
+        ldout(s->cct, 0) << "NOTICE: etag mismatch: part: " << iter->first << " etag: " << iter->second << dendl;
+        ret = -ERR_INVALID_PART;
+        return;
+      }
+
+      hex_to_buf(obj_iter->second.etag.c_str(), petag, CEPH_CRYPTO_MD5_DIGESTSIZE);
+      hash.Update((const byte *)petag, sizeof(petag));
+
+      RGWUploadPartInfo& obj_part = obj_iter->second;
+
+      /* update manifest for part */
+      string oid = mp.get_part(obj_iter->second.num);
+      rgw_obj src_obj;
+      src_obj.init_ns(s->bucket, oid, mp_ns);
+
+      if (obj_part.manifest.empty()) {
+        ldout(s->cct, 0) << "ERROR: empty manifest for object part: obj=" << src_obj << dendl;
+        ret = -ERR_INVALID_PART;
+        return;
+      } else {
+        manifest.append(obj_part.manifest);
+      }
+
+      rgw_obj_key remove_key;
+      src_obj.get_index_key(&remove_key);
+
+      remove_objs.push_back(remove_key);
+
+      ofs += obj_part.size;
+    }
+  } while (truncated);
+  hash.Final((byte *)final_etag);
+
+  buf_to_hex((unsigned char *)final_etag, sizeof(final_etag), final_etag_str);
+  snprintf(&final_etag_str[CEPH_CRYPTO_MD5_DIGESTSIZE * 2],  sizeof(final_etag_str) - CEPH_CRYPTO_MD5_DIGESTSIZE * 2,
+           "-%lld", (long long)parts->parts.size());
+  etag = final_etag_str;
+  ldout(s->cct, 10) << "calculated etag: " << final_etag_str << dendl;
+
+  etag_bl.append(final_etag_str, strlen(final_etag_str) + 1);
+
+  attrs[RGW_ATTR_ETAG] = etag_bl;
+
+  target_obj.init(s->bucket, s->object.name);
+  if (versioned_object) {
+    store->gen_rand_obj_instance_name(&target_obj);
+  }
+
+  RGWObjectCtx& obj_ctx = *static_cast<RGWObjectCtx *>(s->obj_ctx);
+
+  obj_ctx.set_atomic(target_obj);
+
+  RGWRados::Object op_target(store, s->bucket_info, *static_cast<RGWObjectCtx *>(s->obj_ctx), target_obj);
+  RGWRados::Object::Write obj_op(&op_target);
+
+  obj_op.meta.manifest = &manifest;
+  obj_op.meta.remove_objs = &remove_objs;
+
+  obj_op.meta.ptag = &s->req_id; /* use req_id as operation tag */
+  obj_op.meta.owner = s->owner.get_id();
+  obj_op.meta.flags = PUT_OBJ_CREATE;
+
+  ret = obj_op.write_meta(ofs, attrs);
+  if (ret < 0)
+    return;
+
+  // remove the upload obj
+  int r = store->delete_obj(*static_cast<RGWObjectCtx *>(s->obj_ctx), s->bucket_info, meta_obj, 0);
+  if (r < 0) {
+    ldout(store->ctx(), 0) << "WARNING: failed to remove object " << meta_obj << dendl;
+  }
+#endif
+}
+
+

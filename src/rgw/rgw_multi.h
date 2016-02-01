@@ -5,7 +5,7 @@
 #define CEPH_RGW_MULTI_H
 
 #include <map>
-#include "rgw_xml.h"
+#include "porting_xml.h"
 
 class RGWMultiCompleteUpload : public XMLObj
 {

@@ -145,6 +145,14 @@ public:
   RGWInitMultipart_ObjStore() {}
   ~RGWInitMultipart_ObjStore() {}
 };
+class RGWCompleteMultipart_ObjStore : public RGWCompleteMultipart {
+public:
+  RGWCompleteMultipart_ObjStore() {}
+  ~RGWCompleteMultipart_ObjStore() {}
+
+  int get_params();
+};
+
 class RGWDeleteObj_ObjStore : public RGWDeleteObj {
 public:
   RGWDeleteObj_ObjStore() {}

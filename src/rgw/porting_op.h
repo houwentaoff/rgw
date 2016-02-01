@@ -506,6 +506,34 @@ public:
   virtual uint32_t op_mask() { return RGW_OP_TYPE_DELETE; }
   virtual bool need_object_expiration() { return false; }
 };
+class RGWCompleteMultipart : public RGWOp {
+protected:
+  int ret;
+  string upload_id;
+  string etag;
+  char *data;
+  int len;
+
+public:
+  RGWCompleteMultipart() {
+    ret = 0;
+    data = NULL;
+    len = 0;
+  }
+  virtual ~RGWCompleteMultipart() {
+    free(data);
+  }
+
+  int verify_permission();
+  void pre_exec();
+  void execute();
+
+  virtual int get_params() = 0;
+  virtual void send_response() = 0;
+  virtual const string name() { return "complete_multipart"; }
+  virtual RGWOpType get_type() { return RGW_OP_COMPLETE_MULTIPART; }
+  virtual uint32_t op_mask() { return RGW_OP_TYPE_WRITE; }
+};
 
 
 #endif

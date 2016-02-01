@@ -8,7 +8,7 @@
 
 #include "include/types.h"
 
-#include "rgw_xml.h"
+#include "porting_xml.h"
 #include "rgw_multi.h"
 
 #define dout_subsys ceph_subsys_rgw
