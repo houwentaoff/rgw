@@ -26,6 +26,10 @@ typedef enum
     CGW_MSG_SET_VOLUME,
     CGW_MSG_GET_VOLUME,
     CGW_MSG_DEL_VOLUME,
+    CGW_MSG_GET_USR_QUOTA,
+    CGW_MSG_GET_VOL_QUOTA,
+    CGW_MSG_SET_USR_QUOTA,
+    CGW_MSG_SET_VOL_QUOTA,
     CGW_MSG_EXIT,
 }cgw_msg_id_t;
 
@@ -40,6 +44,10 @@ typedef struct {
     int (*getvol)(char *vol_name, int sock_fd, ssize_t (*complete)(int fd, const void *buf, size_t count));
     int (*delvol)(char *vol_name, int sock_fd, ssize_t (*complete)(int fd, const void *buf, size_t count));
     int (*setvol)(char *vol_name, int sock_fd, ssize_t (*complete)(int fd, const void *buf, size_t count));
+    int (*getusr_quota)(char *user_name, int sock_fd, ssize_t (*complete)(int fd, const void *buf, size_t count));
+    int (*getvol_quota)(char *vol_name, int sock_fd, ssize_t (*complete)(int fd, const void *buf, size_t count));
+    int (*setusr_quota)(char *user_name, int sock_fd, ssize_t (*complete)(int fd, const void *buf, size_t count));
+    int (*setvol_quota)(char *vol_name, int sock_fd, ssize_t (*complete)(int fd, const void *buf, size_t count));
 }cgw_api_t;
 //cgw client use
 int post_msg(int msg_id, const char payload[], int payload_size, bool bclose);

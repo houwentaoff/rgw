@@ -179,11 +179,35 @@ int cgw_msg_handler(cgw_msg_t *p_msg, cgw_api_t *p_cgw_api)
         case CGW_MSG_DEL_VOLUME:   
             p_cgw_api->delvol(p_msg->param, p_msg->sock_fd, write);
             break;
+        case CGW_MSG_GET_USR_QUOTA:
+            if (!p_cgw_api->getusr_quota)
+                goto not_impl;
+            break;
+        case CGW_MSG_GET_VOL_QUOTA:
+            if (!p_cgw_api->getusr_quota)
+                goto not_impl;
+            break;
+        case CGW_MSG_SET_USR_QUOTA:
+            if (!p_cgw_api->getusr_quota)
+                goto not_impl;
+            break;
+        case CGW_MSG_SET_VOL_QUOTA:
+            if (!p_cgw_api->getusr_quota)
+                goto not_impl;
+            break;
         default:
+            if (!p_cgw_api->getusr_quota)
+                goto not_impl;            
             printf("error msg\n");
             break;
     }
+
     close(p_msg->sock_fd);
+    
+    return 0;
+not_impl:
+    close(p_msg->sock_fd);
+    printf("NOT implemented\n");   
     return 0;
 }
 void *main_loop(void* arg)

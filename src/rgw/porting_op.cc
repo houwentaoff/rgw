@@ -32,6 +32,8 @@
 #include "porting_user.h"
 #include "porting_rest.h"
 #include "porting_rados.h"
+#include "porting_acl.h"
+#include "porting_acl_s3.h"
 #include "include/rados/librados.hh"
 #include "common/shell.h"
 #include "common/ceph_crypto.h"
@@ -230,6 +232,146 @@ int RGWHandler::init(RGWRados *_store, struct req_state *_s, RGWClientIO *cio)
 
   return 0;
 }
+static int decode_policy(CephContext *cct, bufferlist& bl, RGWAccessControlPolicy *policy)
+{
+  bufferlist::iterator iter = bl.begin();
+  try {
+    policy->decode(iter);
+  } catch (buffer::error& err) {
+    ldout(cct, 0) << "ERROR: could not decode policy, caught buffer::error" << dendl;
+    return -EIO;
+  }
+  if (1/*cct->_conf->subsys.should_gather(ceph_subsys_rgw, 15)*/) {
+    RGWAccessControlPolicy_S3 *s3policy = static_cast<RGWAccessControlPolicy_S3 *>(policy);
+    ldout(cct, 15) << "Read AccessControlPolicy";
+    s3policy->to_xml(*_dout);
+    *_dout << dendl;
+  }
+  return 0;
+}
+
+static int get_bucket_policy_from_attr(CephContext *cct, RGWRados *store, void *ctx,
+                                       RGWBucketInfo& bucket_info, map<string, bufferlist>& bucket_attrs,
+                                       RGWAccessControlPolicy *policy, rgw_obj& obj)
+{
+  map<string, bufferlist>::iterator aiter = bucket_attrs.find(RGW_ATTR_ACL);
+
+  if (aiter != bucket_attrs.end()) {
+    int ret = decode_policy(cct, aiter->second, policy);
+    if (ret < 0)
+      return ret;
+  } else {
+    ldout(cct, 0) << "WARNING: couldn't find acl header for bucket, generating default" << dendl;
+    RGWUserInfo uinfo;
+    /* object exists, but policy is broken */
+    int r = rgw_get_user_info_by_uid(store, bucket_info.owner, uinfo);
+    if (r < 0)
+      return r;
+
+    policy->create_default(bucket_info.owner, uinfo.display_name);
+  }
+  return 0;
+}
+
+static int get_obj_policy_from_attr(CephContext *cct, RGWRados *store, RGWObjectCtx& obj_ctx,
+                                    RGWBucketInfo& bucket_info, map<string, bufferlist>& bucket_attrs,
+                                    RGWAccessControlPolicy *policy, rgw_obj& obj)
+{
+  bufferlist bl;
+  int ret = 0;
+
+  RGWRados::Object op_target(store, bucket_info, obj_ctx, obj);
+  RGWRados::Object::Read rop(&op_target);
+
+  ret = rop.get_attr(RGW_ATTR_ACL, bl);
+  if (ret >= 0) {
+    ret = decode_policy(cct, bl, policy);
+    if (ret < 0)
+      return ret;
+  } else if (ret == -ENODATA) {
+    /* object exists, but policy is broken */
+    ldout(cct, 0) << "WARNING: couldn't find acl header for object, generating default" << dendl;
+    RGWUserInfo uinfo;
+    ret = rgw_get_user_info_by_uid(store, bucket_info.owner, uinfo);
+    if (ret < 0)
+      return ret;
+
+    policy->create_default(bucket_info.owner, uinfo.display_name);
+  }
+  return ret;
+}
+
+/**
+ * Get the AccessControlPolicy for an object off of disk.
+ * policy: must point to a valid RGWACL, and will be filled upon return.
+ * bucket: name of the bucket containing the object.
+ * object: name of the object to get the ACL for.
+ * Returns: 0 on success, -ERR# otherwise.
+ */
+static int get_policy_from_attr(CephContext *cct, RGWRados *store, void *ctx,
+                                RGWBucketInfo& bucket_info, map<string, bufferlist>& bucket_attrs,
+                                RGWAccessControlPolicy *policy, rgw_obj& obj)
+{
+  if (obj.bucket.name.empty()) {
+    return 0;
+  }
+
+  if (obj.get_object().empty()) {
+    rgw_obj instance_obj;
+    //store->get_bucket_instance_obj(bucket_info.bucket, instance_obj);
+    return get_bucket_policy_from_attr(cct, store, ctx, bucket_info, bucket_attrs,
+                                       policy, instance_obj);
+  }
+  return get_obj_policy_from_attr(cct, store, *static_cast<RGWObjectCtx *>(ctx), bucket_info, bucket_attrs,
+                                  policy, obj);
+}
+
+static int read_policy(RGWRados *store, struct req_state *s,
+                       RGWBucketInfo& bucket_info, map<string, bufferlist>& bucket_attrs,
+                       RGWAccessControlPolicy *policy, rgw_bucket& bucket, rgw_obj_key& object)
+{
+  string upload_id;
+  upload_id = s->info.args.get("uploadId");
+  rgw_obj obj;
+
+  if (!s->system_request && bucket_info.flags & BUCKET_SUSPENDED) {
+    ldout(s->cct, 0) << "NOTICE: bucket " << bucket_info.bucket.name << " is suspended" << dendl;
+    return -ERR_USER_SUSPENDED;
+  }
+
+  if (!object.empty() && !upload_id.empty()) {
+    /* multipart upload */
+    RGWMPObj mp(object.name, upload_id);
+    string oid = mp.get_meta();
+    obj.init_ns(bucket, oid, mp_ns);
+    obj.set_in_extra_data(true);
+  } else {
+    obj = rgw_obj(bucket, object);
+  }
+  int ret = get_policy_from_attr(s->cct, store, s->obj_ctx, bucket_info, bucket_attrs, policy, obj);
+  if (ret == -ENOENT && !object.empty()) {
+    /* object does not exist checking the bucket's ACL to make sure
+       that we send a proper error code */
+    RGWAccessControlPolicy bucket_policy(s->cct);
+    string no_object;
+    rgw_obj no_obj(bucket, no_object);
+    ret = get_policy_from_attr(s->cct, store, s->obj_ctx, bucket_info, bucket_attrs, &bucket_policy, no_obj);
+    if (ret < 0)
+      return ret;
+    string& owner = bucket_policy.get_owner().get_id();
+    if (!s->system_request && owner.compare(s->user.user_id) != 0 &&
+        !bucket_policy.verify_permission(s->user.user_id, s->perm_mask, RGW_PERM_READ))
+      ret = -EACCES;
+    else
+      ret = -ENOENT;
+
+  } else if (ret == -ENOENT) {
+      ret = -ERR_NO_SUCH_BUCKET;
+  }
+
+  return ret;
+}
+
 
 /**
  * Get the AccessControlPolicy for a bucket or object off of disk.
@@ -254,11 +396,11 @@ static int rgw_build_policies(RGWRados *store, struct req_state *s, bool only_bu
   }
 
   if(s->dialect.compare("s3") == 0) {
-//    s->bucket_acl = new RGWAccessControlPolicy_S3(s->cct);
+    s->bucket_acl = new RGWAccessControlPolicy_S3(s->cct);
   } else if(s->dialect.compare("swift")  == 0) {
     //s->bucket_acl = new RGWAccessControlPolicy_SWIFT(s->cct);
   } else {
-    //s->bucket_acl = new RGWAccessControlPolicy(s->cct);
+    s->bucket_acl = new RGWAccessControlPolicy(s->cct);
   }
 
   if (s->copy_source) { /* check if copy source is within the current domain */
@@ -298,13 +440,13 @@ static int rgw_build_policies(RGWRados *store, struct req_state *s, bool only_bu
 
     if (s->bucket_exists) {
       rgw_obj_key no_obj;
-//      ret = read_policy(store, s, s->bucket_info, s->bucket_attrs, s->bucket_acl, s->bucket, no_obj);
+      ret = read_policy(store, s, s->bucket_info, s->bucket_attrs, s->bucket_acl, s->bucket, no_obj);
     } else {
-//      s->bucket_acl->create_default(s->user.user_id, s->user.display_name);
+      s->bucket_acl->create_default(s->user.user_id, s->user.display_name);
       ret = -ERR_NO_SUCH_BUCKET;
     }
 
-//    s->bucket_owner = s->bucket_acl->get_owner();
+    s->bucket_owner = s->bucket_acl->get_owner();
 
     string& region = s->bucket_info.region;
 //    map<string, RGWRegion>::iterator dest_region = store->region_map.regions.find(region);
@@ -335,14 +477,14 @@ static int rgw_build_policies(RGWRados *store, struct req_state *s, bool only_bu
     if (!s->bucket_exists) {
       return -ERR_NO_SUCH_BUCKET;
     }
-//    s->object_acl = new RGWAccessControlPolicy(s->cct);
+    s->object_acl = new RGWAccessControlPolicy(s->cct);
 
     rgw_obj obj(s->bucket, s->object);
     store->set_atomic(s->obj_ctx, obj);
     if (prefetch_data) {
       store->set_prefetch_data(s->obj_ctx, obj);
     }
-//    ret = read_policy(store, s, s->bucket_info, s->bucket_attrs, s->object_acl, s->bucket, s->object);
+    ret = read_policy(store, s, s->bucket_info, s->bucket_attrs, s->object_acl, s->bucket, s->object);
   }
 
   return ret;
@@ -1091,20 +1233,18 @@ void RGWDeleteBucket::execute()
     return;
   }
 #ifdef FICS
-#if 0
+#if 1
   int con_fd;
-  char key_buf[256];
-  con_fd = post_msg(CGW_MSG_GET_PASSWORD, auth_id.c_str(), auth_id.size()+1, false);
-  if (1 == recv_msg(con_fd, key_buf, true))
+  char del_buf[256];
+  con_fd = post_msg(CGW_MSG_DEL_VOLUME, s->bucket_name_str.c_str(), s->bucket_name_str.size()+1, false);
+  if (1 == recv_msg(con_fd, del_buf, true))
   {
       //not found
-      dout(0) << "ERROR: access key not encoded in user info" << dendl;
-      return -EPERM;
+      dout(0) << "ERROR: del vol fail" << dendl;
+      ret = ERR_INTERNAL_ERROR;
+      return;
   }
-    else
-    {
-        k.key = key_buf;
-    }
+
 #endif
 #else
   sprintf(cmd_buf, "rm -rf %s/%s", G.buckets_root.c_str(), s->bucket_name_str.c_str());
@@ -1592,6 +1732,8 @@ void RGWDeleteObj::execute()
     string outs;
     struct stat buf;
     string  full_path = "";
+    string stat_path="";
+    sys_info info;
     memset(&buf, 0, sizeof (struct stat));
     
     full_path += G.buckets_root + string("/") + s->bucket.name +string("/") + s->object.name;
@@ -1601,29 +1743,37 @@ void RGWDeleteObj::execute()
     old_uid = drop_privs(s->user.auid);
     if (0 != ::stat(full_path.c_str(), &buf))
     {
-        return;
+        goto done;
     }
     ret = rad->mon_command(cmd, bl, &outbl, &outs);
   //update stat
-    sys_info info;
-    string stat_path = G.buckets_root + string("/") + s->bucket.name + string("/") + string(PROC_BUCKET_PATH) + string("/") + string(PROC_STAT);
+    
+    stat_path += G.buckets_root + string("/") + s->bucket.name + string("/") + string(PROC_BUCKET_PATH) + string("/") + string(PROC_STAT);
     info.set_file(stat_path);
     parse_conf(stat_path.c_str(), &info, ":",(FUNC)(&info.get_params));
     info.num_entries -= 1;
     info.total_size -= buf.st_size;//s->obj_size;
     sys_info::set_params(&info, sys_info::BUCNET_STAT, NULL, NULL);
+done:
     id = restore_privs(old_uid);
-    
+    return ;
     //if (ret == -EEXIST)
     //    ret = 0;    
 }
+<<<<<<< HEAD
 int RGWCompleteMultipart::verify_permission()
 {
   if (!verify_bucket_permission(s, RGW_PERM_WRITE))
+=======
+int RGWStatBucket::verify_permission()
+{
+  if (!verify_bucket_permission(s, RGW_PERM_READ))
+>>>>>>> 47099b1a74cbef530bfa1764771a5fb2b6496f6e
     return -EACCES;
 
   return 0;
 }
+<<<<<<< HEAD
 
 void RGWCompleteMultipart::pre_exec()
 {
@@ -1817,3 +1967,280 @@ void RGWCompleteMultipart::execute()
 }
 
 
+=======
+void RGWStatBucket::pre_exec()
+{
+  rgw_bucket_object_pre_exec(s);
+}
+void RGWStatBucket::execute()
+{
+  RGWUserBuckets buckets;
+  bucket.bucket = s->bucket;
+  buckets.add(bucket);
+  map<string, RGWBucketEnt>& m = buckets.get_buckets();
+  ret = 0;//store->update_containers_stats(m);
+  if (!ret)
+    ret = -EEXIST;
+  if (ret > 0) {
+    ret = 0;
+    map<string, RGWBucketEnt>::iterator iter = m.find(bucket.bucket.name);
+    if (iter != m.end()) {
+      bucket = iter->second;
+    } else {
+      ret = -EINVAL;
+    }
+  }
+}
+bool verify_object_permission(struct req_state *s, int perm);
+
+int RGWGetACLs::verify_permission()
+{
+  bool perm;
+  if (!s->object.empty()) {
+    perm = verify_object_permission(s, RGW_PERM_READ_ACP);
+  } else {
+    perm = verify_bucket_permission(s, RGW_PERM_READ_ACP);
+  }
+  if (!perm)
+    return -EACCES;
+
+  return 0;
+}
+void RGWGetACLs::pre_exec()
+{
+  rgw_bucket_object_pre_exec(s);
+}
+void RGWGetACLs::execute()
+{
+  stringstream ss;
+#if 0
+  ss<<"<AccessControlPolicy xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">"
+     "<Owner> <ID>"<<"bwcpn"<<"</ID></Owner>";
+  ss<<"<AccessControlList>"
+            "<Grant>"
+                "<Grantee xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:type=\"Canonical User\">"
+                    "<ID>"<<"bwcpn"<<"</ID><DisplayName>"<<"bwcpn houu"<<"</DisplayName>"
+                "</Grantee>"
+                "<Permission>FULL_CONTROL</Permission>"
+            "</Grant>"
+          "</AccessControlList>";
+  ss<<"</AccessControlPolicy>";                  
+#else
+  RGWAccessControlPolicy *acl = (!s->object.empty() ? s->object_acl : s->bucket_acl);
+  RGWAccessControlPolicy_S3 *s3policy = static_cast<RGWAccessControlPolicy_S3 *>(acl);
+  s3policy->to_xml(ss);
+#endif
+  acls = ss.str();
+}
+bool RGWCopyObj::parse_copy_location(const string& url_src, string& bucket_name, rgw_obj_key& key)
+{
+  string name_str;
+  string params_str;
+
+  int pos = url_src.find('?');
+  if (pos < 0) {
+    name_str = url_src;
+  } else {
+    name_str = url_src.substr(0, pos);
+    params_str = url_src.substr(pos + 1);
+  }
+
+
+  string dec_src;
+
+  url_decode(name_str, dec_src);
+  const char *src = dec_src.c_str();
+
+  if (*src == '/') ++src;
+
+  string str(src);
+
+  pos = str.find("/");
+  if (pos <= 0)
+    return false;
+
+  bucket_name = str.substr(0, pos);
+  key.name = str.substr(pos + 1);
+
+  if (key.name.empty()) {
+    return false;
+  }
+
+  if (!params_str.empty()) {
+    RGWHTTPArgs args;
+    args.set(params_str);
+    args.parse();
+
+    key.instance = args.get("versionId", NULL);
+  }
+
+  return true;
+}
+static void format_xattr(std::string &xattr)
+{
+  /* If the extended attribute is not valid UTF-8, we encode it using quoted-printable
+   * encoding.
+   */
+  if ((check_utf8(xattr.c_str(), xattr.length()) != 0) ||
+      (check_for_control_characters(xattr.c_str(), xattr.length()) != 0)) {
+    static const char MIME_PREFIX_STR[] = "=?UTF-8?Q?";
+    static const int MIME_PREFIX_LEN = sizeof(MIME_PREFIX_STR) - 1;
+    static const char MIME_SUFFIX_STR[] = "?=";
+    static const int MIME_SUFFIX_LEN = sizeof(MIME_SUFFIX_STR) - 1;
+    int mlen = mime_encode_as_qp(xattr.c_str(), NULL, 0);
+    char *mime = new char[MIME_PREFIX_LEN + mlen + MIME_SUFFIX_LEN + 1];
+    strcpy(mime, MIME_PREFIX_STR);
+    mime_encode_as_qp(xattr.c_str(), mime + MIME_PREFIX_LEN, mlen);
+    strcpy(mime + MIME_PREFIX_LEN + (mlen - 1), MIME_SUFFIX_STR);
+    xattr.assign(mime);
+    delete [] mime;
+  }
+}
+
+/**
+ * Get the HTTP request metadata out of the req_state as a
+ * map(<attr_name, attr_contents>, where attr_name is RGW_ATTR_PREFIX.HTTP_NAME)
+ * s: The request state
+ * attrs: will be filled up with attrs mapped as <attr_name, attr_contents>
+ *
+ */
+static void rgw_get_request_metadata(CephContext *cct,
+                                     struct req_info& info,
+                                     map<string, bufferlist>& attrs,
+                                     const bool allow_empty_attrs = true)
+{
+  map<string, string>::iterator iter;
+  for (iter = info.x_meta_map.begin(); iter != info.x_meta_map.end(); ++iter) {
+    const string &name(iter->first);
+    string &xattr(iter->second);
+
+    if (allow_empty_attrs || !xattr.empty()) {
+      ldout(cct, 10) << "x>> " << name << ":" << xattr << dendl;
+      format_xattr(xattr);
+      string attr_name(RGW_ATTR_PREFIX);
+      attr_name.append(name);
+      map<string, bufferlist>::value_type v(attr_name, bufferlist());
+      std::pair < map<string, bufferlist>::iterator, bool > rval(attrs.insert(v));
+      bufferlist& bl(rval.first->second);
+      bl.append(xattr.c_str(), xattr.size() + 1);
+    }
+  }
+}
+
+int RGWCopyObj::init_common()
+{
+  if (if_mod) {
+    if (parse_time(if_mod, &mod_time) < 0) {
+      ret = -EINVAL;
+      return ret;
+    }
+    mod_ptr = &mod_time;
+  }
+
+  if (if_unmod) {
+    if (parse_time(if_unmod, &unmod_time) < 0) {
+      ret = -EINVAL;
+      return ret;
+    }
+    unmod_ptr = &unmod_time;
+  }
+
+  bufferlist aclbl;
+  dest_policy.encode(aclbl);
+
+  attrs[RGW_ATTR_ACL] = aclbl;
+  rgw_get_request_metadata(s->cct, s->info, attrs);
+
+  map<string, string>::iterator iter;
+  for (iter = s->generic_attrs.begin(); iter != s->generic_attrs.end(); ++iter) {
+    bufferlist& attrbl = attrs[iter->first];
+    const string& val = iter->second;
+    attrbl.append(val.c_str(), val.size() + 1);
+  }
+
+  return 0;
+}
+int RGWCopyObj::verify_permission()
+{
+  ret = get_params();
+  if (ret < 0)
+    return ret; 
+  return 0;
+}
+void RGWCopyObj::pre_exec()
+{
+  rgw_bucket_object_pre_exec(s);
+}
+void RGWCopyObj::execute()
+{
+  uid_t old_uid = 0;
+  int id;
+  
+  string src_path = G.buckets_root + string("/") + src_bucket_name + string("/") + src_object.name;
+  string dst_path = G.buckets_root + string("/") + dest_bucket_name + string("/") + dest_object;
+
+  if (init_common() < 0)
+    return;
+  old_uid = drop_privs(s->user.auid);
+  
+  if (::rename(src_path.c_str(), dst_path.c_str()) < 0)
+  {
+    ret = -errno;
+  }
+  else
+  {
+    ret = 0;
+  }
+  id = restore_privs(old_uid);
+  
+#if 0
+  rgw_obj src_obj(src_bucket, src_object);
+  rgw_obj dst_obj(dest_bucket, dest_object);
+
+  RGWObjectCtx& obj_ctx = *static_cast<RGWObjectCtx *>(s->obj_ctx);
+  obj_ctx.set_atomic(src_obj);
+  obj_ctx.set_atomic(dst_obj);
+
+  encode_delete_at_attr(delete_at, attrs);
+
+  ret = store->copy_obj(obj_ctx,
+                        s->user.user_id,
+                        client_id,
+                        op_id,
+                        &s->info,
+                        source_zone,
+                        dst_obj,
+                        src_obj,
+                        dest_bucket_info,
+                        src_bucket_info,
+                        &src_mtime,
+                        &mtime,
+                        mod_ptr,
+                        unmod_ptr,
+                        if_match,
+                        if_nomatch,
+                        attrs_mod,
+                        attrs, RGW_OBJ_CATEGORY_MAIN,
+                        olh_epoch,
+			delete_at,
+                        (version_id.empty() ? NULL : &version_id),
+                        &s->req_id, /* use req_id as tag */
+                        &etag,
+                        &s->err,
+                        copy_obj_progress_cb, (void *)this
+                        );
+#endif
+}
+void RGWCopyObj::progress_cb(off_t ofs)
+{
+  if (1/*!s->cct->_conf->rgw_copy_obj_progress*/)
+    return;
+
+  if (1/*ofs - last_ofs < s->cct->_conf->rgw_copy_obj_progress_every_bytes*/)
+    return;
+
+  send_partial_response(ofs);
+
+  last_ofs = ofs;
+}
+>>>>>>> 47099b1a74cbef530bfa1764771a5fb2b6496f6e

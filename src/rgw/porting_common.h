@@ -1382,9 +1382,9 @@ struct req_state {
     string bucket_name_str;
     rgw_obj_key object;
     string src_bucket_name;
-//    rgw_obj_key src_object;
-//    ACLOwner bucket_owner;
-//    ACLOwner owner;
+    rgw_obj_key src_object;
+    ACLOwner bucket_owner;
+    ACLOwner owner;
 
     string region_endpoint;
     string bucket_instance_id;
@@ -1396,8 +1396,8 @@ struct req_state {
     bool has_bad_meta;
 
     RGWUserInfo user; 
-//    RGWAccessControlPolicy *bucket_acl;
-//    RGWAccessControlPolicy *object_acl;
+    RGWAccessControlPolicy *bucket_acl;
+    RGWAccessControlPolicy *object_acl;
 
     bool system_request;
 
@@ -1497,5 +1497,6 @@ extern int parse_conf(const char *path, void* obj, const char *delim, void (*cb)
 /* destination should be CEPH_CRYPTO_HMACSHA1_DIGESTSIZE bytes long */
 
 extern int rgw_parse_op_type_list(const string& str, uint32_t *perm);
-
+extern string rgw_trim_whitespace(const string& src);
+extern string rgw_trim_quotes(const string& val);
 #endif

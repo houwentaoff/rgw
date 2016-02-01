@@ -287,12 +287,15 @@ int RGWRados::stat_system_obj(RGWObjectCtx& obj_ctx,
                               uint64_t *obj_size,
                               RGWObjVersionTracker *objv_tracker)
 {
-  RGWObjState *astate = NULL;
+  RGWObjState ostate;  
+  RGWObjState *astate = &ostate;//NULL;
 
+  astate->size  = 100; 
+  astate->mtime = 111111;
   int r = 0;//get_obj_state(&obj_ctx, obj, &astate, objv_tracker);
   if (r < 0)
     return r;
-#if 0
+#if 1
   if (!astate->exists) {
     return -ENOENT;
   }

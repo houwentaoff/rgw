@@ -535,5 +535,122 @@ public:
   virtual uint32_t op_mask() { return RGW_OP_TYPE_WRITE; }
 };
 
+class RGWStatBucket : public RGWOp {
+protected:
+  int ret;
+  RGWBucketEnt bucket;
+
+public:
+  RGWStatBucket() : ret(0) {}
+  ~RGWStatBucket() {}
+
+  int verify_permission();
+  void pre_exec();
+  void execute();
+
+  virtual void send_response() = 0;
+  virtual const string name() { return "stat_bucket"; }
+  virtual RGWOpType get_type() { return RGW_OP_STAT_BUCKET; }
+  virtual uint32_t op_mask() { return RGW_OP_TYPE_READ; }
+};
+class RGWGetACLs : public RGWOp {
+protected:
+  int ret;
+  string acls;
+
+public:
+  RGWGetACLs() : ret(0) {}
+
+  int verify_permission();
+  void pre_exec();
+  void execute();
+
+  virtual void send_response() = 0;
+  virtual const string name() { return "get_acls"; }
+  virtual RGWOpType get_type() { return RGW_OP_GET_ACLS; }
+  virtual uint32_t op_mask() { return RGW_OP_TYPE_READ; }
+};
+class RGWCopyObj : public RGWOp {
+protected:
+  RGWAccessControlPolicy dest_policy;
+  const char *if_mod;
+  const char *if_unmod;
+  const char *if_match;
+  const char *if_nomatch;
+  off_t ofs;
+  off_t len;
+  off_t end;
+  time_t mod_time;
+  time_t unmod_time;
+  time_t *mod_ptr;
+  time_t *unmod_ptr;
+  int ret;
+  map<string, bufferlist> attrs;
+  string src_bucket_name;
+  rgw_bucket src_bucket;
+  rgw_obj_key src_object;
+  string dest_bucket_name;
+  rgw_bucket dest_bucket;
+  string dest_object;
+  time_t src_mtime;
+  time_t mtime;
+  RGWRados::AttrsMod attrs_mod;
+  RGWBucketInfo src_bucket_info;
+  RGWBucketInfo dest_bucket_info;
+  string source_zone;
+  string client_id;
+  string op_id;
+  string etag;
+
+  off_t last_ofs;
+
+  string version_id;
+  uint64_t olh_epoch;
+
+  time_t delete_at;
+
+  int init_common();
+
+public:
+  RGWCopyObj() {
+    if_mod = NULL;
+    if_unmod = NULL;
+    if_match = NULL;
+    if_nomatch = NULL;
+    ofs = 0;
+    len = 0;
+    end = -1;
+    mod_time = 0;
+    unmod_time = 0;
+    mod_ptr = NULL;
+    unmod_ptr = NULL;
+    ret = 0;
+    src_mtime = 0;
+    mtime = 0;
+    attrs_mod = RGWRados::ATTRSMOD_NONE;
+    last_ofs = 0;
+    olh_epoch = 0;
+    delete_at = 0;
+  }
+
+  static bool parse_copy_location(const string& src, string& bucket_name, rgw_obj_key& object);
+
+  virtual void init(RGWRados *store, struct req_state *s, RGWHandler *h) {
+    RGWOp::init(store, s, h);
+    dest_policy.set_ctx(s->cct);
+  }
+  int verify_permission();
+  void pre_exec();
+  void execute();
+  void progress_cb(off_t ofs);
+
+  virtual int init_dest_policy() { return 0; }
+  virtual int get_params() = 0;
+  virtual void send_partial_response(off_t ofs) {}
+  virtual void send_response() = 0;
+  virtual const string name() { return "copy_obj"; }
+  virtual RGWOpType get_type() { return RGW_OP_COPY_OBJ; }
+  virtual uint32_t op_mask() { return RGW_OP_TYPE_WRITE; }
+};
 
 #endif
