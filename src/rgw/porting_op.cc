@@ -935,9 +935,16 @@ void RGWGetObj::execute()
 #else
  /* :TODO:2015/12/29 17:46:41:hwt:  */
 //  lenaa = st.st_size;
-  end = st.st_size;
-  new_end = end;
-  left = st.st_size;
+  if (ofs != 0 || end != 0)
+  {
+    left = end-ofs;
+  }
+  else
+  {
+    end = st.st_size;
+    new_end = end;
+    left = st.st_size;
+  }
 
   if ((fd = ::open(full_path.c_str(), O_RDONLY)) < 0)
   {
