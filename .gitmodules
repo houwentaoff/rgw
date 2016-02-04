@@ -1,3 +1,6 @@
 [submodule "src/civetweb"]
 	path = src/civetweb
 	url = git@github.com:ceph/civetweb.git
+[submodule "src/third-party/boto3"]
+	path = src/third-party/boto3
+	url = https://github.com/boto/boto3.git

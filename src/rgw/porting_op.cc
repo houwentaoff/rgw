@@ -850,6 +850,7 @@ void RGWGetObj::execute()
   MD5 hash;
   char md5_buf[512]={0};
   string md5_val;
+  size_t cur_ofs = 0;
 
   utime_t start_time = s->time;
   bufferlist bl;
@@ -935,14 +936,14 @@ void RGWGetObj::execute()
 #else
  /* :TODO:2015/12/29 17:46:41:hwt:  */
 //  lenaa = st.st_size;
-  if (ofs != 0 || end != 0)
+  if (ofs != 0 || end != -1)
   {
     left = end-ofs;
   }
   else
   {
-    end = st.st_size;
-    new_end = end;
+//    end = st.st_size;
+    new_end = st.st_size;
     left = st.st_size;
   }
 
@@ -966,7 +967,17 @@ void RGWGetObj::execute()
   {
 #if 1
       ssize_t len = G.rgw_max_chunk_size > left ? left : G.rgw_max_chunk_size;
-      int retv = bl.read_fd(fd, len);
+      int retv;
+      if (ofs != 0 || end != -1)
+      {
+
+          retv = bl.pread_fd(fd, len, ofs + cur_ofs);
+          cur_ofs += len; 
+      }
+      else
+      {
+          retv = bl.read_fd(fd, len);
+      }
       if (retv != len)
       {
           goto done_err;

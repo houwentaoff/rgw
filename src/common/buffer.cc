@@ -1870,6 +1870,23 @@ ssize_t buffer::list::read_fd(int fd, size_t len)
   }
   return ret;
 }
+ssize_t buffer::list::pread_fd(int fd, size_t len, off_t offset)
+{
+  // try zero copy first
+  if (false && read_fd_zero_copy(fd, len) == 0) {
+    // TODO fix callers to not require correct read size, which is not
+    // available for raw_pipe until we actually inspect the data
+    return 0;
+  }
+  int s = ROUND_UP_TO(len, CEPH_BUFFER_APPEND_SIZE);
+  bufferptr bp = buffer::create_aligned(s, CEPH_BUFFER_APPEND_SIZE);
+  ssize_t ret = safe_pread(fd, (void*)bp.c_str(), len, offset);
+  if (ret >= 0) {
+    bp.set_length(ret);
+    append(bp);
+  }
+  return ret;
+}
 
 int buffer::list::read_fd_zero_copy(int fd, size_t len)
 {

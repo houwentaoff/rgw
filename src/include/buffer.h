@@ -527,6 +527,7 @@ public:
     void hexdump(std::ostream &out) const;
     int read_file(const char *fn, std::string *error);
     ssize_t read_fd(int fd, size_t len);
+    ssize_t pread_fd(int fd, size_t len, off_t offset);
     int read_fd_zero_copy(int fd, size_t len);
     int write_file(const char *fn, int mode=0644);
     int write_fd(int fd) const;
