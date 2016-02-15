@@ -953,15 +953,31 @@ void RGWGetObj::execute()
       ret = -ERR_NOT_FOUND;//ERR_PRECONDITION_FAILED;
       goto done_err;
   }
-  sprintf(md5_buf, "md5sum %s", full_path.c_str());
-  md5_val = shell_execute(md5_buf);
-  sscanf(md5_val.c_str(), "%s", md5_buf);
-  printf("md5_val.c_str() [%s] md5_buf [%s] \n", md5_val.c_str(), md5_buf);
-  bl.clear();
-  bl.append(md5_buf, strlen(md5_buf)+1);
+  if (ofs != 0 || end != -1)
+  {
+      bl.pread_fd(fd, left, ofs);
+      hash.Update((const byte *)bl.c_str(), bl.length());
+      bl.clear();
+      hash.Final(m);
+      buf_to_hex(m, CEPH_CRYPTO_MD5_DIGESTSIZE, calc_md5);
+      bl.append(calc_md5, strlen(calc_md5)+1);
+
+  }
+  else
+  {
+      sprintf(md5_buf, "md5sum %s", full_path.c_str());
+      md5_val = shell_execute(md5_buf);
+      sscanf(md5_val.c_str(), "%s", md5_buf);
+      printf("md5_val.c_str() [%s] md5_buf [%s] \n", md5_val.c_str(), md5_buf);
+      bl.clear();
+      bl.append(md5_buf, strlen(md5_buf)+1);
+  }
+
   attrs.insert(pair<string, bufferlist>(RGW_ATTR_ETAG, bl));
   bl.clear();
   send_response_data(bl, 0, bl.length());
+
+
   
   while (left > 0)
   {
