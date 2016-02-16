@@ -21,8 +21,16 @@ S3_TOP       = ../../
 
 SDK_TOP      = $(S3_TOP)../../
 
+PLATFORM 	 = FICS
+
+ifeq ($(PLATFORM), FICS)
 INCLUDES 	 = -I../ -I$(S3_TOP)../web/ -I$(SDK_TOP)/code/include_com -I$(S3_TOP)../web/web_include \
 			   -I$(S3_TOP)../web/Json/include
+endif
+
+ifeq ($(PLATFORM), FISHARE)
+INCLUDES 	 = -I../ -I/home/work/work/fishare2.0_MDS_Naturalize/code/windows/JNI
+endif
 
 include ../lib.rules
 
@@ -36,11 +44,16 @@ LD = $(SYS_LIBS) -lpthread -lfcgi -lcurl
 LD_FICS = -L$(SDK_TOP)/bin/libs -lJson -lFicsJNI -lcomutility -lficsnet -lfiOsd -ljournal \
 		  -lprtmds -lfistate -lficsNetSyn -lzookeeper_mt
 
+LD_FISHARE = -L$(SDK_TOP)/bin/libs -lJson -lFicsJNI -lcomutility -lficsnet -lfiOsd -ljournal \
+		  -lprtmds -lfistate -lficsNetSyn -lzookeeper_mt
+
 TEST_FCGI 		:= test_fcgi.fcgi
 
 TEST_GET_USERS  := test_getuserinf
 
 CMD_SERVER 		:= cmd_server
+
+CMD_SERVER_FISHARE 		:= cmd_server_fishare
 
 all:ECHO_BUILD $(TEST_FCGI) 
 
@@ -53,6 +66,8 @@ TEST_GET_USERS_OBJS     =  test_getuserinf.o
 
 CMD_USERS_OBJS    		=  cmd_server.o
 
+CMD_SERVER_FISHARE_OBJS    		=  cmd_server_fishare.o
+
 SER_MANAGER_OBJS        =  ser_manager.o
 
 $(TEST_FCGI): $(TEST_FCGI_OBJS) 
@@ -62,6 +77,9 @@ $(TEST_GET_USERS): $(TEST_GET_USERS_OBJS) $(LOCAL_LIBS)
 		$(CXX) $^ -o $@ $(LD_FICS)
 
 $(CMD_SERVER): $(CMD_USERS_OBJS) $(LOCAL_LIBS)
+		$(CXX) $^ -o $@ $(LD_FICS)
+
+$(CMD_SERVER_FISHARE): $(CMD_SERVER_FISHARE_OBJS) $(LOCAL_LIBS)
 		$(CXX) $^ -o $@ $(LD_FICS)
 
 $(SER_MANAGER): $(SER_MANAGER_OBJS)

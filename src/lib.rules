@@ -13,11 +13,16 @@
 # 
 # ###############################################
 
-#PLATFORM = FICS
-PLATFORM = UNIX
+PLATFORM = FICS
+#PLATFORM = UNIX
+#PLATFORM = FISHARE
 
 ifeq ($(PLATFORM), FICS)
 MACRO = -DFICS
+endif
+
+ifeq ($(PLATFORM), FISHARE)
+MACRO = -DFISHARE
 endif
 
 #AR                      =   arm-goke-linux-gnueabi-ar

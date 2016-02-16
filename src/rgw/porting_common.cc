@@ -278,8 +278,8 @@ os_auth_token(NULL), info(_cct, e)
   content_started = false;
   format = 0;
   formatter = NULL;
-//  bucket_acl = NULL;
-//  object_acl = NULL;
+  bucket_acl = NULL;
+  object_acl = NULL;
   expect_cont = false;
 
   header_ended = false;
@@ -289,7 +289,7 @@ os_auth_token(NULL), info(_cct, e)
   system_request = false;
 
   os_auth_token = NULL;
-//  time = ceph_clock_now(cct);
+  time = ceph_clock_now(cct);
   perm_mask = 0;
   content_length = 0;
   bucket_exists = false;
