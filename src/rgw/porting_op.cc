@@ -349,6 +349,8 @@ static int read_policy(RGWRados *store, struct req_state *s,
     obj = rgw_obj(bucket, object);
   }
   int ret = get_policy_from_attr(s->cct, store, s->obj_ctx, bucket_info, bucket_attrs, policy, obj);
+  policy->owner.id = "bwcpn";//("<ID>bwcpn</ID>");// = "bwcpn";
+
   if (ret == -ENOENT && !object.empty()) {
     /* object does not exist checking the bucket's ACL to make sure
        that we send a proper error code */
@@ -2397,4 +2399,11 @@ void RGWCopyObj::progress_cb(off_t ofs)
   send_partial_response(ofs);
 
   last_ofs = ofs;
+}
+int RGWGetBucketLocation::verify_permission()
+{
+  //if (s->user.user_id.compare(s->bucket_owner.get_id()) != 0)
+  //  return -EACCES;
+
+  return 0;
 }

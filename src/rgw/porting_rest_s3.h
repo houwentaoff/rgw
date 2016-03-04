@@ -233,5 +233,13 @@ public:
   void send_partial_response(off_t ofs);
   void send_response();
 };
+class RGWGetBucketLocation_ObjStore_S3 : public RGWGetBucketLocation {
+public:
+  RGWGetBucketLocation_ObjStore_S3() {}
+  ~RGWGetBucketLocation_ObjStore_S3() {}
+
+  void send_response();
+};
+
 #endif
 

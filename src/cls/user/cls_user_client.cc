@@ -50,6 +50,10 @@ void cls_user_bucket_list(librados::ObjectReadOperation& op,
   for (vector<string>::iterator it = fileVec.begin(); it!=fileVec.end(); it++)
   {
       tmp.bucket.name = *it;
+      //time_t creation_time;
+      struct stat statbuf;
+      stat(G.buckets_root.c_str(), &statbuf);
+      tmp.creation_time   = statbuf.st_ctime;
       entries.push_back(tmp);
   }
   *pret = 0;

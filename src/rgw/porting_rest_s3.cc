@@ -515,7 +515,7 @@ RGWOp *RGWHandler_ObjStore_Bucket_S3::op_get()
     return NULL;//new RGWGetBucketLogging_ObjStore_S3;
 
   if (s->info.args.sub_resource_exists("location"))
-    return NULL;//new RGWGetBucketLocation_ObjStore_S3;
+    return new RGWGetBucketLocation_ObjStore_S3;
 
   if (s->info.args.sub_resource_exists("versioning"))
     return NULL;//new RGWGetBucketVersioning_ObjStore_S3;
@@ -1179,5 +1179,28 @@ void RGWCopyObj_ObjStore_S3::send_response()
     s->formatter->close_section();
     rgw_flush_formatter_and_reset(s, s->formatter);
   }
+}
+void RGWGetBucketLocation_ObjStore_S3::send_response()
+{
+  dump_errno(s);
+  end_header(s, this);
+  dump_start(s);
+
+  string region = s->bucket_info.region;
+  string api_name="chengdu";
+#if 0
+  map<string, RGWRegion>::iterator iter = store->region_map.regions.find(region);
+  if (iter != store->region_map.regions.end()) {
+    api_name = iter->second.api_name;
+  } else  {
+    if (region != "default") {
+      api_name = region;
+    }
+  }
+#endif
+  s->formatter->dump_format_ns("LocationConstraint",
+			       "http://doc.s3.amazonaws.com/doc/2006-03-01/",
+			       "%s",api_name.c_str());
+  rgw_flush_formatter_and_reset(s, s->formatter);
 }
 

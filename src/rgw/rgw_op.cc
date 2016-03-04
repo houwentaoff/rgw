@@ -312,6 +312,7 @@ static int read_policy(RGWRados *store, struct req_state *s,
     obj = rgw_obj(bucket, object);
   }
   int ret = get_policy_from_attr(s->cct, store, s->obj_ctx, bucket_info, bucket_attrs, policy, obj);
+  policy.owner = "bwcpn";
   if (ret == -ENOENT && !object.empty()) {
     /* object does not exist checking the bucket's ACL to make sure
        that we send a proper error code */

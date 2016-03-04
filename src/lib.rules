@@ -13,8 +13,8 @@
 # 
 # ###############################################
 
-PLATFORM = FICS
-#PLATFORM = UNIX
+#PLATFORM = FICS
+PLATFORM = UNIX
 #PLATFORM = FISHARE
 
 ifeq ($(PLATFORM), FICS)

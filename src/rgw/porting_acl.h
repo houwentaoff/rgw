@@ -246,7 +246,7 @@ WRITE_CLASS_ENCODER(RGWAccessControlList)
 
 class ACLOwner
 {
-protected:
+public:
   string id;
   string display_name;
 public:
@@ -277,7 +277,7 @@ WRITE_CLASS_ENCODER(ACLOwner)
 
 class RGWAccessControlPolicy
 {
-protected:
+public:
   CephContext *cct;
   RGWAccessControlList acl;
   ACLOwner owner;
